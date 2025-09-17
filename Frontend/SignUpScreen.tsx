@@ -1,5 +1,6 @@
 // SignUpScreen.tsx
 import React, { useState } from 'react';
+import api from './utils/api';
 import {
     View, Text, TextInput, TouchableOpacity, StyleSheet,
     Platform, Switch, SafeAreaView, ScrollView, StatusBar
@@ -32,9 +33,30 @@ export default function SignUpScreen({ navigation }: any) {
         }
     };
 
-    const handleSignUp = () => {
-        console.log('SignUp Data:', { name, email, password, birth, gender, phonenumber, pregnant, feeding });
-        navigation.navigate('Login');
+    const handleSignUp = async () => {
+        try {
+            const res = await api.post(`/api/users/registerUser`, {
+            name,
+            email,
+            password,
+            birth,
+            gender,
+            phonenumber,
+            pregnant,
+            feeding,
+            });
+
+            if (res.data.success) {
+            alert('회원가입 성공 🎉');
+            console.log('SignUp Data:', { name, email, password, birth, gender, phonenumber, pregnant, feeding });
+            navigation.navigate('Login');
+            } else {
+            alert('회원가입 실패 ❌');
+            }
+        } catch (err) {
+            console.error(err);
+            alert('서버 오류 발생');
+        }
     };
 
     return (
