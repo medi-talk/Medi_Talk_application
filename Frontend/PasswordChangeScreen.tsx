@@ -6,8 +6,13 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS, SIZES, FONTS } from './styles/theme';
+import api from './utils/api';
+import { useAppStore } from './store/appStore'; // 전역 user 상태 불러오기 
 
 export default function PasswordChangeScreen({ navigation }: any) {
+  const { state } = useAppStore(); // 전역 user 상태 불러오기
+  const userId = state.user?.id;
+
   const [currentPw, setCurrentPw] = useState('');
   const [newPw, setNewPw] = useState('');
   const [confirmPw, setConfirmPw] = useState('');
@@ -35,7 +40,7 @@ export default function PasswordChangeScreen({ navigation }: any) {
     return true;
   }, [currentPw, newPw, confirmPw]);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!isValid) {
       Alert.alert('확인', '입력값을 다시 확인해주세요.');
       return;
@@ -45,10 +50,35 @@ export default function PasswordChangeScreen({ navigation }: any) {
       return;
     }
 
-    console.log('CHANGE_PASSWORD', { currentPw, newPw });
-    Alert.alert('완료', '비밀번호가 변경되었습니다.', [
-      { text: '확인', onPress: () => navigation.goBack() },
-    ]);
+    try {
+      const res = await api.put(`/api/users/changeUserPassword/${userId}`, {
+        currentPassword: currentPw,
+        newPassword: newPw,
+      });
+
+      if (res.data.success) {
+        Alert.alert('성공', '비밀번호가 변경되었습니다.', [
+          { text: '확인', onPress: () => navigation.goBack() },
+        ]);
+      }
+
+    } catch (err : any) {
+      console.error('change password error:', err);
+
+      const status = err?.response?.status;
+      const message = err?.response?.data?.message;
+
+      if (status == 400) {
+        Alert.alert('실패', message);
+      } else if (status == 401) {
+        Alert.alert('실패', message);
+      } else if (status == 500) {
+        Alert.alert('서버 오류', message);
+      } else {
+        Alert.alert('네트워크 오류', '서버에 연결할 수 없습니다.');
+      }
+    }
+
   };
 
   return (

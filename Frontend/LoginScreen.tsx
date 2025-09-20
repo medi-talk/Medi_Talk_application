@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 
 import { COLORS, SIZES, FONTS } from './styles/theme'; 
+import api from './utils/api';
 import { useAppStore } from './store/appStore'; // 전역 user 상태 불러오기
 
 export default function LoginScreen({ navigation }: any) {
@@ -25,22 +26,31 @@ export default function LoginScreen({ navigation }: any) {
     }
 
     try {
-      // === 로그인 API(DB) 붙일 부분 ===
-      // 예시: axios 또는 fetch 사용
-      // const res = await axios.post('http://서버주소/api/login', {
-      //   email,
-      //   password,
-      // });
+      const res = await api.post('/api/users/loginUser', {
+        userId: email,
+        userPassword: password,
+      });
 
-      // 서버 응답(DB)에서 id, name 가져오기 
-      // setUser({ id: res.data.id, name: res.data.name });
-
-      // 임시 데이터 저장용(테스트용)
-      setUser({ id: 'dummyId123', name: '홍길동' }); // 데베 연동시 삭제할 코드 
-
-      navigation.navigate('Main');
-    } catch (error) {
-      Alert.alert('로그인 실패', '아이디 또는 비밀번호가 올바르지 않습니다.');
+      if(res.data.success) {
+        const { userId, userName } = res.data.user;
+        setUser({ id: userId, name: userName });
+        Alert.alert('로그인 성공', `${userName}님, 환영합니다!`);
+        navigation.navigate('Main');
+      } 
+      
+    } catch (err : any) {
+      console.error('login error:', err);
+      
+      const status = err?.response?.status;
+      const message = err?.response?.data?.message;
+      
+      if (status == 401) {
+        Alert.alert('로그인 실패', message);
+      } else if (status == 500) {
+        Alert.alert('서버 오류', message);
+      } else {
+        Alert.alert('네트워크 오류', '서버에 연결할 수 없습니다.');
+      }
     }
   };
 

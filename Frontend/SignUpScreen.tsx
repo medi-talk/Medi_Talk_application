@@ -1,15 +1,15 @@
 // SignUpScreen.tsx
 import React, { useState } from 'react';
-import api from './utils/api';
 import {
     View, Text, TextInput, TouchableOpacity, StyleSheet,
-    Platform, Switch, SafeAreaView, ScrollView, StatusBar
+    Platform, Switch, SafeAreaView, ScrollView, StatusBar, Alert
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Picker } from '@react-native-picker/picker';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 import { COLORS, SIZES, FONTS } from './styles/theme';
+import api from './utils/api';
 
 export default function SignUpScreen({ navigation }: any) {
     const [name, setName] = useState('');
@@ -47,15 +47,26 @@ export default function SignUpScreen({ navigation }: any) {
             });
 
             if (res.data.success) {
-            alert('회원가입 성공 🎉');
+            Alert.alert('회원가입 성공 🎉');
             console.log('SignUp Data:', { name, email, password, birth, gender, phonenumber, pregnant, feeding });
             navigation.navigate('Login');
-            } else {
-            alert('회원가입 실패 ❌');
             }
-        } catch (err) {
-            console.error(err);
-            alert('서버 오류 발생');
+
+        } catch (err : any) {
+            console.error('register error:', err);
+
+            const status = err?.response?.status;
+            const message = err?.response?.data?.message;
+
+            if (status == 400) {
+                Alert.alert('회원가입 실패', message);
+            } else if (status == 409) {
+                Alert.alert('회원가입 실패', message);
+            } else if (status == 500) {
+                Alert.alert('서버 오류', message);
+            } else {
+                Alert.alert('네트워크 오류', '서버에 연결할 수 없습니다.');
+            }
         }
     };
 

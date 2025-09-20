@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   SafeAreaView, ScrollView, StatusBar, Platform, Switch, Alert
@@ -7,6 +7,8 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { Picker } from '@react-native-picker/picker';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS, SIZES, FONTS } from './styles/theme';
+import api from './utils/api';
+import { useAppStore } from './store/appStore'; // 전역 user 상태 불러오기
 
 type ProfileData = {
   name: string;
@@ -19,33 +21,56 @@ type ProfileData = {
   feeding?: boolean;
 };
 
-const defaultProfile: ProfileData = {
-  name: '홍길동',
-  email: 'hong@example.com',
-  phonenumber: '010-1234-5678',
-  birth: '1999-09-09',
-  gender: '남자',
-  nationality: '내국인',
-  pregnant: false,
-  feeding: false,
-};
-
 export default function ProfileEditScreen({ route, navigation }: any) {
-  const initial = (route?.params?.profile as ProfileData) ?? defaultProfile;
+  const { state } = useAppStore(); // 전역 상태 불러오기
+  const userId = state.user?.id;
 
-  const [name, setName] = useState(initial.name);
-  const [email] = useState(initial.email);
-  const [phonenumber, setPhonenumber] = useState(initial.phonenumber);
-  const [birth, setBirth] = useState(initial.birth);
-  const [gender, setGender] = useState<'남자' | '여자'>(initial.gender);
-  const [nationality, setNationality] = useState<'내국인' | '외국인'>(initial.nationality);
-  const [pregnant, setPregnant] = useState<boolean>(!!initial.pregnant);
-  const [feeding, setFeeding] = useState<boolean>(!!initial.feeding);
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phonenumber, setPhonenumber] = useState('');
+  const [birth, setBirth] = useState('');
+  const [gender, setGender] = useState<'남자' | '여자'>('남자');
+  const [nationality, setNationality] = useState<'내국인' | '외국인'>('내국인');
+  const [pregnant, setPregnant] = useState<boolean>(false);
+  const [feeding, setFeeding] = useState<boolean>(false);
 
   const [showPicker, setShowPicker] = useState(false);
-  const [selectedDate, setSelectedDate] = useState<Date>(
-    initial.birth ? new Date(initial.birth) : new Date()
-  );
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+
+  // 사용자 프로필 불러오기
+  useEffect(() => {
+    if (!userId) return;
+
+    (async () => {
+      try {
+        const res = await api.get(`/api/users/getUserProfile/${userId}`);
+        if (res.data.success) {
+          const p = res.data.profile;
+          setName(p.user_name);
+          setEmail(userId);
+          setPhonenumber(p.phone_number);
+          setBirth(p.birthday);
+          setGender(p.gender);
+          setPregnant(!!p.pregnant_flag);
+          setFeeding(!!p.feeding_flag);
+          setSelectedDate(new Date(p.birthday));
+        } else {
+          Alert.alert('오류', '프로필을 불러오지 못했습니다.');
+        }
+      } catch (err : any) {
+        console.error('get profile error:', err);
+
+        const status = err?.response?.status;
+        const message = err?.response?.data?.message;
+
+        if (status == 500) {
+          Alert.alert('서버 오류', message);
+        } else {
+          Alert.alert('네트워크 오류', '서버에 연결할 수 없습니다.');
+        }
+      }
+    })();
+  }, [userId]);
 
   const onChangeBirth = (_: any, date?: Date) => {
     if (Platform.OS === 'android') setShowPicker(false);
@@ -55,14 +80,39 @@ export default function ProfileEditScreen({ route, navigation }: any) {
     }
   };
 
-  const handleSave = () => {
-    const payload: ProfileData = {
-      name, email, phonenumber, birth, gender, nationality, pregnant, feeding,
-    };
-    console.log('PROFILE_SAVE', payload);
-    Alert.alert('저장 완료', '프로필이 업데이트되었습니다.', [
-      { text: '확인', onPress: () => navigation.goBack() },
-    ]);
+  const handleSave = async () => {
+    try {
+      const payload = {
+        user_name : name,
+        phone_number : phonenumber,
+        birthday : birth,
+        gender : gender,
+        pregnant_flag : !!pregnant,
+        feeding_flag : !!feeding
+      }
+
+      const res = await api.put(`/api/users/updateUserProfile/${userId}`, payload);
+
+      if (res.data.success) {
+        Alert.alert('저장 완료', '프로필이 업데이트되었습니다.', [
+          { text: '확인', onPress: () => navigation.goBack() },
+        ]);
+      } 
+
+    } catch (err : any) {
+      console.error('update profile error:', err);
+
+      const status = err?.response?.status;
+      const message = err?.response?.data?.message;
+
+      if (status == 400) {
+        Alert.alert('저장 실패', message);
+      } else if (status == 500) {
+        Alert.alert('서버 오류', message);
+      } else {
+        Alert.alert('네트워크 오류', '서버에 연결할 수 없습니다.');
+      }
+    }
   };
 
   const handleChangeAvatar = () => {
