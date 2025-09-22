@@ -1,120 +1,260 @@
 // InteractionScreen.tsx
-import React, { useMemo, useState } from 'react';
-import { View, Text, TextInput, StyleSheet, TouchableOpacity, FlatList } from 'react-native';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import { COLORS, SIZES, FONTS } from './styles/theme';
 
-type Rule = { a: string; b: string; level: '주의' | '금기' | '정보'; note: string };
+import React, { useState } from "react";
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  SafeAreaView,
+  StatusBar,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+} from "react-native";
+import { COLORS, SIZES, FONTS } from "./styles/theme";
 
-//api 완성되면 가져와서 수정하면 됨
-const DEMO_RULES: Rule[] = [
-  { a: '와파린', b: '아스피린', level: '주의', note: '출혈 위험 증가 가능 (데모)' },
-  { a: '와파린', b: '이부프로펜', level: '주의', note: '출혈/위장관 자극 (데모)' },
-  { a: '아스피린', b: '이부프로펜', level: '정보', note: '진통 효과 영향 가능 (데모)' },
-  { a: 'MAOI', b: '수도에페드린', level: '금기', note: '고혈압 위기 위험 (데모)' },
-];
+//반드시 공공데이터포털 "디코딩 인증키" 원본 그대로 넣으세요 
+const SERVICE_KEY = "";
 
-function norm(s: string) {
-  return s.trim().toLowerCase();
+// 문자열 정리 함수 
+const cleanText = (txt: string) => (txt || "").replace(/\s+/g, " ");
+
+// DUR 약품 검색 (자동완성)
+async function fetchDrugList(query: string) {
+  if (!query) return [];
+  const url = `https://apis.data.go.kr/1471000/DURPrdlstInfoService03/getDurPrdlstInfoList03?serviceKey=${encodeURIComponent(
+    SERVICE_KEY
+  )}&type=json&itemName=${encodeURIComponent(query)}&numOfRows=20&pageNo=1`;
+
+  try {
+    const response = await fetch(url);
+    const json = await response.json();
+    return json.body?.items || [];
+  } catch (err) {
+    console.error("검색 실패:", err);
+    return [];
+  }
+}
+
+// DUR API 공통 호출
+async function fetchDurAPI(apiName: string, drug1: string, drug2?: string) {
+  let url = `https://apis.data.go.kr/1471000/DURPrdlstInfoService03/${apiName}?serviceKey=${encodeURIComponent(
+    SERVICE_KEY
+  )}&type=json&numOfRows=10&pageNo=1`;
+
+  if (["getUsjntTabooInfoList03", "getEfcyDplctInfoList03"].includes(apiName) && drug2) {
+    url += `&itemName=${encodeURIComponent(drug1)}&itemName2=${encodeURIComponent(drug2)}`;
+  } else {
+    url += `&itemName=${encodeURIComponent(drug1)}`;
+  }
+
+  try {
+    const response = await fetch(url);
+    const json = await response.json();
+    return json.body?.items || [];
+  } catch (err) {
+    console.error(`${apiName} 요청 실패:`, err);
+    return [];
+  }
 }
 
 export default function InteractionScreen() {
-  const [input, setInput] = useState('');
-  const [items, setItems] = useState<string[]>([]);
+  const [drug1, setDrug1] = useState("");
+  const [drug2, setDrug2] = useState("");
+  const [results1, setResults1] = useState<any[]>([]);
+  const [results2, setResults2] = useState<any[]>([]);
+  const [mergedResults, setMergedResults] = useState<any[]>([]);
 
-  const add = () => {
-    const k = input.trim();
-    if (!k) return;
-    if (!items.map(norm).includes(norm(k))) setItems(prev => [k, ...prev]);
-    setInput('');
-  };
-  const remove = (name: string) => setItems(prev => prev.filter(i => i !== name));
-
-  const results = useMemo(() => {
-    const names = items.map(norm);
-    const findings: Rule[] = [];
-    for (const r of DEMO_RULES) {
-      const A = norm(r.a), B = norm(r.b);
-      if (names.includes(A) && names.includes(B)) findings.push(r);
+  const handleSearch1 = async (text: string) => {
+    setDrug1(text);
+    if (text.length > 0) {
+      const list = await fetchDrugList(text);
+      setResults1(list);
+    } else {
+      setResults1([]);
     }
-    return findings;
-  }, [items]);
+  };
 
-  const levelColor = (lv: Rule['level']) => (lv === '금기' ? COLORS.danger : lv === '주의' ? '#FF9F43' : COLORS.gray);
+  const handleSearch2 = async (text: string) => {
+    setDrug2(text);
+    if (text.length > 0) {
+      const list = await fetchDrugList(text);
+      setResults2(list);
+    } else {
+      setResults2([]);
+    }
+  };
+
+  const handleCheckInteraction = async () => {
+    if (!drug1 || !drug2) {
+      Alert.alert("알림", "두 개의 약품명을 모두 입력해주세요.");
+      return;
+    }
+
+    // 병용금기
+    const tabooRes = await fetchDurAPI("getUsjntTabooInfoList03", drug1, drug2);
+    const tabooText =
+      tabooRes.length > 0
+        ? `병용금기 (${cleanText(
+            tabooRes[0].PROHBT_CONTENT || tabooRes[0].MIXTURE || "사유 없음"
+          )})`
+        : null;
+
+    // 효능군 중복
+    const duplicateRes = await fetchDurAPI("getEfcyDplctInfoList03", drug1, drug2);
+    const duplicateText = duplicateRes.length > 0 ? "효능군 중복" : null;
+
+    // 결과 합치기 병용금기 > 효능군 중복 병용금기 약품은 효능군 중복을 봐도 필요가 없으므로 병용금기만 결과창에 나옴 
+    const combined: any[] = [];
+    if (tabooText) {
+      combined.push({ level: "위험", text: tabooText });
+    } else if (duplicateText) {
+      combined.push({ level: "주의", text: duplicateText });
+    }
+
+    setMergedResults(combined);
+  };
 
   return (
-    <View style={styles.safe}>
-      <View style={styles.row}>
-        <TextInput
-          style={[styles.input, { flex: 1 }]}
-          placeholder="약물명 입력 후 추가 (예: 와파린, 아스피린)"
-          placeholderTextColor={COLORS.gray}
-          value={input}
-          onChangeText={setInput}
-          onSubmitEditing={add}
-        />
-        <TouchableOpacity style={styles.addBtn} onPress={add}>
-          <Icon name="plus" size={20} color={COLORS.white} />
-        </TouchableOpacity>
-      </View>
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar barStyle="dark-content" />
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <ScrollView contentContainerStyle={styles.container}>
+          <Text style={styles.title}>약물 상호작용 확인</Text>
+          <Text style={styles.subtitle}>두 개의 약품명을 입력하고 결과를 확인하세요.</Text>
 
-      
-      <View style={styles.chips}>
-        {items.map(n => (
-          <View key={n} style={styles.chip}>
-            <Text style={styles.chipTxt}>{n}</Text>
-            <TouchableOpacity onPress={() => remove(n)} style={{ marginLeft: 6 }}>
-              <Icon name="close" size={16} color={COLORS.gray} />
-            </TouchableOpacity>
-          </View>
-        ))}
-      </View>
+          {/* 첫 번째 약품 입력 */}
+          <TextInput
+            style={styles.input}
+            placeholder="첫 번째 약품명"
+            value={drug1}
+            onChangeText={handleSearch1}
+            placeholderTextColor="#666"
+          />
+          {results1.length > 0 && (
+            <View style={styles.suggestionBox}>
+              {results1.map((item, idx) => (
+                <TouchableOpacity
+                  key={idx}
+                  onPress={() => {
+                    setDrug1(item.ITEM_NAME);
+                    setResults1([]);
+                  }}
+                >
+                  <Text style={styles.suggestion}>{item.ITEM_NAME}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
 
-      
-      <FlatList
-        data={results}
-        keyExtractor={(_, i) => String(i)}
-        renderItem={({ item }) => (
-          <View style={styles.card}>
-            <Text style={styles.title}>{item.a} + {item.b}</Text>
-            <Text style={[styles.level, { color: levelColor(item.level) }]}>{item.level}</Text>
-            <Text style={styles.note}>{item.note}</Text>
-          </View>
-        )}
-        ListEmptyComponent={
-          <View style={styles.empty}>
-            <Text style={styles.muted}>
-              선택된 약물 조합에서 특이 상호작용이 없거나 (데모 룰셋 기준){'\n'}
-              아직 약물을 추가하지 않았습니다.
-            </Text>
-          </View>
-        }
-        contentContainerStyle={{ paddingVertical: 8 }}
-      />
+          {/* 두 번째 약품 입력 */}
+          <TextInput
+            style={styles.input}
+            placeholder="두 번째 약품명"
+            value={drug2}
+            onChangeText={handleSearch2}
+            placeholderTextColor="#666"
+          />
+          {results2.length > 0 && (
+            <View style={styles.suggestionBox}>
+              {results2.map((item, idx) => (
+                <TouchableOpacity
+                  key={idx}
+                  onPress={() => {
+                    setDrug2(item.ITEM_NAME);
+                    setResults2([]);
+                  }}
+                >
+                  <Text style={styles.suggestion}>{item.ITEM_NAME}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
 
-      <Text style={styles.notice}>
-        ※ 데모 룰셋입니다. 실제 복약/병용 전에는 약사·의사 상담 및 공식 데이터베이스를 확인하세요.
-      </Text>
-    </View>
+          {/* 상호작용 확인 버튼 */}
+          <TouchableOpacity style={styles.checkButton} onPress={handleCheckInteraction}>
+            <Text style={styles.buttonText}>상호작용 확인</Text>
+          </TouchableOpacity>
+
+          {/* 결과 출력 */}
+          <View style={styles.resultBox}>
+            <Text style={styles.resultTitle}>[약물 상호작용 결과]</Text>
+            {mergedResults.length === 0 ? (
+              <Text style={styles.safeText}>특별한 상호작용 정보 없음</Text>
+            ) : (
+              mergedResults.map((item, idx) => (
+                <Text
+                  key={idx}
+                  style={[
+                    styles.detailText,
+                    item.level === "위험" ? styles.dangerText : styles.warningText,
+                  ]}
+                >
+                  {item.text}
+                </Text>
+              ))
+            )}
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: COLORS.lightGray, padding: SIZES.padding },
-  row: { flexDirection: 'row', alignItems: 'center' },
+  safeArea: { flex: 1, backgroundColor: COLORS.white },
+  container: { flexGrow: 1, padding: SIZES.padding },
+  title: { ...FONTS.h1, color: COLORS.primary, marginBottom: SIZES.base },
+  subtitle: { ...FONTS.p, color: COLORS.darkGray, marginBottom: SIZES.padding * 2 },
   input: {
-    backgroundColor: COLORS.white, borderRadius: SIZES.radius, paddingHorizontal: 12, height: 46,
-    ...FONTS.p, color: COLORS.darkGray, marginRight: 8,
+    width: "100%",
+    backgroundColor: "#f9f9f9",
+    borderRadius: SIZES.radius,
+    padding: 15,
+    marginBottom: SIZES.base,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+    ...FONTS.p,
+    color: "#000",
+    fontWeight: "600",
   },
-  addBtn: { width: 46, height: 46, borderRadius: 10, backgroundColor: COLORS.primary, alignItems: 'center', justifyContent: 'center' },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', marginVertical: 12, gap: 8 },
-  chip: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.white, borderRadius: 18, paddingHorizontal: 10, paddingVertical: 6 },
-  chipTxt: { ...FONTS.p, color: COLORS.darkGray },
-  card: { backgroundColor: COLORS.white, borderRadius: SIZES.radius, padding: SIZES.padding, marginBottom: SIZES.base * 2 },
-  title: { ...FONTS.h3, color: COLORS.darkGray },
-  level: { ...FONTS.h3, marginTop: 6 },
-  note: { ...FONTS.p, color: COLORS.gray, marginTop: 4 },
-  empty: { alignItems: 'center', marginTop: '40%' },
-  muted: { ...FONTS.p, color: COLORS.gray, textAlign: 'center' },
-  notice: { ...FONTS.p, color: COLORS.gray, textAlign: 'center', marginTop: 8 },
+  suggestionBox: {
+    borderWidth: 1,
+    borderColor: COLORS.lightGray,
+    borderRadius: SIZES.radius,
+    backgroundColor: COLORS.white,
+    marginBottom: SIZES.base,
+  },
+  suggestion: {
+    padding: 10,
+    borderBottomWidth: 1,
+    borderColor: COLORS.lightGray,
+    color: COLORS.darkGray,
+  },
+  checkButton: {
+    backgroundColor: COLORS.primary,
+    padding: 15,
+    borderRadius: SIZES.radius,
+    alignItems: "center",
+    marginTop: SIZES.padding,
+    marginBottom: SIZES.padding * 2,
+  },
+  buttonText: { ...FONTS.h3, color: COLORS.white },
+  resultBox: {
+    backgroundColor: COLORS.lightGray,
+    padding: 15,
+    borderRadius: SIZES.radius,
+    marginBottom: SIZES.base,
+  },
+  resultTitle: { ...FONTS.h2, fontWeight: "bold", color: COLORS.darkGray, marginBottom: 8 },
+  safeText: { ...FONTS.p, color: COLORS.gray },
+  detailText: { ...FONTS.p, marginBottom: 5 },
+  dangerText: { color: COLORS.danger, fontWeight: "bold" },
+  warningText: { color: "#FF9F43", fontWeight: "600" },
 });

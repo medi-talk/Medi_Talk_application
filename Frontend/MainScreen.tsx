@@ -40,16 +40,16 @@ const FeatureCard = ({ item, onPress }: {
     item: { name: string; icon: string; screen: string; }; 
     onPress: () => void; 
 }) => (
-    <TouchableOpacity style={styles.card} onPress={onPress}>
-        <View style={styles.iconContainer}>
-            <Icon name={item.icon} size={30} color={COLORS.primary} />
+    <TouchableOpacity style={styles.cardRow} onPress={onPress}>
+        <View style={styles.iconRow}>
+            <Icon name={item.icon} size={26} color={COLORS.primary} />
         </View>
-        <Text style={styles.cardText}>{item.name}</Text>
+        <Text style={styles.cardRowText}>{item.name}</Text>
     </TouchableOpacity>
 );
 
 export default function MainScreen({ navigation }: any) {
-    const { state } = useAppStore(); // 전역 상태 불러오기
+    const { state } = useAppStore();
     const userName = state.user ? state.user.name : '사용자';
 
     const renderSection = ({ item: section }: { 
@@ -59,16 +59,15 @@ export default function MainScreen({ navigation }: any) {
             <Text style={styles.sectionTitle}>{section.title}</Text>
             <FlatList
                 data={section.data}
-                renderItem={({ item }: { item: { name: string; icon: string; screen: string; } }) => (
+                renderItem={({ item }) => (
                     <FeatureCard
                         item={item}
                         onPress={() => navigation.navigate(item.screen)}
                     />
                 )}
                 keyExtractor={(item) => item.name}
-                numColumns={2}
+                numColumns={3} // 화면 너비에 맞게 3개씩 배치
                 scrollEnabled={false}
-                columnWrapperStyle={{ justifyContent: 'space-between' }}
             />
         </View>
     );
@@ -114,39 +113,42 @@ const styles = StyleSheet.create({
         marginBottom: SIZES.padding,
     },
     section: {
-        marginBottom: SIZES.base,
+        marginBottom: SIZES.padding,
     },
     sectionTitle: {
         ...FONTS.h3,
         color: COLORS.darkGray,
-        marginBottom: SIZES.base * 2,
+        marginBottom: SIZES.base,
         paddingHorizontal: SIZES.base,
     },
-    card: {
+    cardRow: {
+        flex: 1, // 화면 크기에 맞게 자동 분할
+        minWidth: 100,
+        maxWidth: 150,
+        margin: 4,
+        alignItems: 'center',
         backgroundColor: COLORS.white,
-        borderRadius: SIZES.radius * 1.5,
-        width: '48%',
-        padding: SIZES.padding,
-        marginBottom: SIZES.padding,
-        alignItems: 'flex-start',
+        borderRadius: SIZES.radius,
+        paddingVertical: 16,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
+        shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.05,
-        shadowRadius: 10,
-        elevation: 5,
+        shadowRadius: 5,
+        elevation: 2,
     },
-    iconContainer: {
-        width: 60,
-        height: 60,
-        borderRadius: 30,
+    iconRow: {
+        width: 50,
+        height: 50,
+        borderRadius: 25,
         backgroundColor: COLORS.primary + '15',
         justifyContent: 'center',
         alignItems: 'center',
-        marginBottom: SIZES.base * 2,
+        marginBottom: 8,
     },
-    cardText: {
+    cardRowText: {
         ...FONTS.p,
-        fontWeight: '600',
+        fontWeight: '500',
         color: COLORS.darkGray,
+        textAlign: 'center',
     },
 });
