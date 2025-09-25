@@ -1,4 +1,3 @@
-// TimerScreen.tsx
 import React, { useEffect, useState } from "react";
 import {
   View, Text, StyleSheet, SafeAreaView, FlatList, TouchableOpacity, Alert
@@ -19,12 +18,10 @@ export default function TimerScreen({ navigation }: any) {
   const { state, removeTimer } = useAppStore();
   const [items, setItems] = useState<TimerItem[]>(state.timers);
 
-  // 전역 timers 변경 시 로컬 items와 동기화
   useEffect(() => {
     setItems(state.timers);
   }, [state.timers]);
 
-  // 1초마다 로컬 카운트다운만 감소
   useEffect(() => {
     const intervalId = setInterval(() => {
       setItems((prev) =>
@@ -50,21 +47,21 @@ export default function TimerScreen({ navigation }: any) {
   };
 
   const renderItem = ({ item }: { item: TimerItem }) => (
-    <View style={styles.card}>
+    <TouchableOpacity
+      style={styles.card}
+      onPress={() => navigation.navigate("TimerEdit", { id: item.id })}
+    >
       <Text style={styles.name}>{item.name}</Text>
-
-      {/* 시간 + 삭제 버튼 같은 줄 배치 */}
       <View style={styles.row}>
         <Text style={styles.time}>{formatHMS(item.nextRemainingSec)}</Text>
         <TouchableOpacity onPress={() => handleDelete(item.id)}>
           <Icon name="delete" size={24} color={COLORS.danger} />
         </TouchableOpacity>
       </View>
-
       {item.times.map((t, i) => (
         <Text key={i} style={styles.subTime}>{t}</Text>
       ))}
-    </View>
+    </TouchableOpacity>
   );
 
   return (
@@ -80,8 +77,6 @@ export default function TimerScreen({ navigation }: any) {
           </View>
         }
       />
-
-      {/* + 버튼 */}
       <TouchableOpacity
         style={styles.fab}
         onPress={() => navigation.navigate("TimerAdd")}

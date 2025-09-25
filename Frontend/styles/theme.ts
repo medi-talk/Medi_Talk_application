@@ -26,5 +26,6 @@ export const FONTS = {
   h1: { fontSize: SIZES.h1, fontWeight: 'bold', lineHeight: 36 },
   h2: { fontSize: SIZES.h2, fontWeight: 'bold', lineHeight: 30 },
   h3: { fontSize: SIZES.h3, fontWeight: 'bold', lineHeight: 22 },
+  h4: { fontSize: 14, fontWeight: "bold", lineHeight: 20 },
   p: { fontSize: SIZES.p, lineHeight: 24 },
 } as const;

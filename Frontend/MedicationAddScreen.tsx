@@ -4,6 +4,7 @@ import {
   StyleSheet, SafeAreaView, ScrollView, StatusBar, Alert, Switch
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { Picker } from '@react-native-picker/picker';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS, SIZES, FONTS } from './styles/theme';
 import { useAppStore } from './store/appStore';
@@ -40,6 +41,7 @@ export default function MedicationAddScreen({ navigation }: any) {
   const { addLinked, addTimer, addDisposal } = useAppStore();
 
   const [medicationName, setMedicationName] = useState('');
+  const [selectedType, setSelectedType] = useState(''); // 약 종류 state
   const [alarmFlag, setAlarmFlag] = useState(true);
 
   const [startDate] = useState(new Date());
@@ -53,6 +55,9 @@ export default function MedicationAddScreen({ navigation }: any) {
   const [showTimePicker, setShowTimePicker] = useState(false);
 
   const [familyShare, setFamilyShare] = useState(false);
+
+  // 데모용 약 종류 (DB 연동 시 삭제 예정)
+  const medTypes = ['해열제', '항생제', '진통제', '혈압약'];
 
   const addTime = () => {
     const timeStr = fmtTime(tempTime);
@@ -72,6 +77,10 @@ export default function MedicationAddScreen({ navigation }: any) {
       Alert.alert('알림', '약 이름을 입력하세요.');
       return;
     }
+    if (!selectedType.trim()) {
+      Alert.alert('알림', '약 종류를 선택하세요.');
+      return;
+    }
     if (times.length === 0) {
       Alert.alert('알림', '복용 시간을 최소 1개 이상 추가하세요.');
       return;
@@ -88,6 +97,7 @@ export default function MedicationAddScreen({ navigation }: any) {
       times,
       alarmFlag,
       familyShare,
+      type: selectedType,
     });
 
     addTimer({
@@ -129,6 +139,22 @@ export default function MedicationAddScreen({ navigation }: any) {
           value={medicationName}
           onChangeText={setMedicationName}
         />
+
+        <Text style={styles.label}>약 종류 선택</Text>
+        <View style={styles.pickerBox}>
+          <Picker
+            selectedValue={selectedType}
+            onValueChange={(itemValue) => setSelectedType(itemValue)}
+            style={[styles.picker, { color: COLORS.darkGray }]}
+            dropdownIconColor={COLORS.primary}
+            itemStyle={{ color: COLORS.darkGray }}
+          >
+            <Picker.Item label="약 종류를 선택하세요" value="" color={COLORS.gray} />
+            {medTypes.map((t) => (
+              <Picker.Item key={t} label={t} value={t} color={COLORS.darkGray} />
+            ))}
+          </Picker>
+        </View>
 
         <Text style={styles.label}>복용 시간 추가</Text>
         <View style={styles.row}>
@@ -219,6 +245,12 @@ const styles = StyleSheet.create({
     color: COLORS.darkGray,
     marginBottom: 12,
   },
+  pickerBox: {
+    backgroundColor: COLORS.lightGray,
+    borderRadius: SIZES.radius,
+    marginBottom: 12,
+  },
+  picker: { height: 50, width: '100%' },
   row: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
   addBtn: {
     marginLeft: 8,

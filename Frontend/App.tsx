@@ -23,11 +23,13 @@ import MedicationDetailScreen from './MedicationDetailScreen';
 import PasswordChangeScreen from './PasswordChangeScreen';
 import ProfileEditScreen from './ProfileEditScreen';
 import TimerScreen from './TimerScreen';
-
 import TimerAddScreen from './TimerAddScreen';
+import TimerEditScreen from './TimerEditScreen';
 import DisposalAddScreen from './DisposalAddScreen';
-
 import MedicationEditScreen from './MedicationEditScreen';
+
+// ✅ 새로 추가
+import DisposalGuideScreen from './DisposalGuideScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -50,13 +52,14 @@ export default function App() {
           <Stack.Screen name="MedicationAdd" component={MedicationAddScreen} />
           <Stack.Screen name="MedicationList" component={MedicationListScreen} />
           <Stack.Screen name="MedicationDetail" component={MedicationDetailScreen} />
-         
           <Stack.Screen name="MedicationEdit" component={MedicationEditScreen} />
           <Stack.Screen name="PasswordChange" component={PasswordChangeScreen} />
           <Stack.Screen name="ProfileEdit" component={ProfileEditScreen} />
           <Stack.Screen name="Timer" component={TimerScreen} />
           <Stack.Screen name="TimerAdd" component={TimerAddScreen} />
+          <Stack.Screen name="TimerEdit" component={TimerEditScreen} />
           <Stack.Screen name="DisposalAdd" component={DisposalAddScreen} />
+          <Stack.Screen name="DisposalGuide" component={DisposalGuideScreen} />
         </Stack.Navigator>
       </NavigationContainer>
     </AppStoreProvider>

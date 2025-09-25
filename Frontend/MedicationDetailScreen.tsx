@@ -13,8 +13,13 @@ import { COLORS, SIZES, FONTS } from './styles/theme';
 import { useAppStore } from './store/appStore';
 
 export default function MedicationDetailScreen({ route, navigation }: any) {
-  const { medication } = route.params ?? {};
-  const { removeLinked } = useAppStore();
+  const passed = route.params?.medication ?? null;   
+  const passedId = route.params?.id ?? passed?.id;   
+  const { state, removeLinked } = useAppStore();
+
+
+  const medication =
+    (passedId ? state.medications.find(m => m.id === passedId) : null) ?? passed ?? null;
 
   if (!medication) {
     return (
@@ -34,7 +39,7 @@ export default function MedicationDetailScreen({ route, navigation }: any) {
         text: '삭제',
         style: 'destructive',
         onPress: () => {
-          removeLinked(medication.id); // 약 + 타이머 + 폐기 알림 같이 제거
+          removeLinked(medication.id); 
           navigation.goBack();
         },
       },
@@ -46,6 +51,10 @@ export default function MedicationDetailScreen({ route, navigation }: any) {
       <StatusBar barStyle="dark-content" />
       <View style={styles.container}>
         <Text style={styles.title}>{medication.name}</Text>
+
+        {/* 약 종류 표시 (없으면 '선택 안 함') */}
+        <Text style={styles.label}>약 종류</Text>
+        <Text style={styles.value}>{medication.type || '선택 안 함'}</Text>
 
         <Text style={styles.label}>복용 기간</Text>
         <Text style={styles.value}>
@@ -68,11 +77,10 @@ export default function MedicationDetailScreen({ route, navigation }: any) {
         <Text style={styles.label}>가족 공개</Text>
         <Text style={styles.value}>{medication.familyShare ? '예' : '아니오'}</Text>
 
-        {/* 수정하기 + 삭제하기 버튼을 한 줄에 배치 */}
         <View style={styles.rowButtons}>
           <TouchableOpacity
             style={[styles.editBtn, { flex: 1, marginRight: 6 }]}
-            onPress={() => navigation.navigate('MedicationEdit', { medication })}
+            onPress={() => navigation.navigate('MedicationEdit', { id: medication.id })}
           >
             <Text style={styles.editBtnText}>수정하기</Text>
           </TouchableOpacity>

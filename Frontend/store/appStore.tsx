@@ -3,6 +3,7 @@ import React, { createContext, useContext, useReducer } from "react";
 export type MedicationItem = {
   id: string;
   name: string;
+  type?: string; 
   startDate: string;
   endDate: string;
   expiry: string;
@@ -44,6 +45,7 @@ type Action =
   | { type: "UPDATE_LINKED"; payload: MedicationItem }
   | { type: "REMOVE_LINKED"; payload: string }
   | { type: "ADD_TIMER"; payload: TimerItem }
+  | { type: "UPDATE_TIMER"; payload: TimerItem }
   | { type: "REMOVE_TIMER"; payload: string }
   | { type: "ADD_DISPOSAL"; payload: DisposalItem }
   | { type: "REMOVE_DISPOSAL"; payload: string };
@@ -74,15 +76,30 @@ function reducer(state: AppState, action: Action): AppState {
       return {
         ...state,
         medications: state.medications.filter((m) => m.id !== action.payload),
+        timers: state.timers.filter((t) => t.id !== action.payload),
+        disposals: state.disposals.filter((d) => d.id !== action.payload),
       };
     case "ADD_TIMER":
       return { ...state, timers: [...state.timers, action.payload] };
+    case "UPDATE_TIMER":
+      return {
+        ...state,
+        timers: state.timers.map((t) =>
+          t.id === action.payload.id ? { ...t, ...action.payload } : t
+        ),
+      };
     case "REMOVE_TIMER":
-      return { ...state, timers: state.timers.filter((t) => t.id !== action.payload) };
+      return {
+        ...state,
+        timers: state.timers.filter((t) => t.id !== action.payload),
+      };
     case "ADD_DISPOSAL":
       return { ...state, disposals: [...state.disposals, action.payload] };
     case "REMOVE_DISPOSAL":
-      return { ...state, disposals: state.disposals.filter((d) => d.id !== action.payload) };
+      return {
+        ...state,
+        disposals: state.disposals.filter((d) => d.id !== action.payload),
+      };
     default:
       return state;
   }
@@ -96,6 +113,7 @@ const AppStoreContext = createContext<{
   updateLinked: (m: MedicationItem) => void;
   removeLinked: (id: string) => void;
   addTimer: (t: TimerItem) => void;
+  updateTimer: (t: TimerItem) => void;
   removeTimer: (id: string) => void;
   addDisposal: (d: DisposalItem) => void;
   removeDisposal: (id: string) => void;
@@ -107,6 +125,7 @@ const AppStoreContext = createContext<{
   updateLinked: () => {},
   removeLinked: () => {},
   addTimer: () => {},
+  updateTimer: () => {},
   removeTimer: () => {},
   addDisposal: () => {},
   removeDisposal: () => {},
@@ -115,7 +134,6 @@ const AppStoreContext = createContext<{
 export function AppStoreProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState);
 
-  // 👇 user 관련 action
   const setUser = (u: User) => {
     dispatch({ type: "SET_USER", payload: u });
   };
@@ -142,6 +160,10 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: "ADD_TIMER", payload: t });
   };
 
+  const updateTimer = (t: TimerItem) => {
+    dispatch({ type: "UPDATE_TIMER", payload: t });
+  };
+
   const removeTimer = (id: string) => {
     dispatch({ type: "REMOVE_TIMER", payload: id });
   };
@@ -164,6 +186,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         updateLinked,
         removeLinked,
         addTimer,
+        updateTimer,
         removeTimer,
         addDisposal,
         removeDisposal,
