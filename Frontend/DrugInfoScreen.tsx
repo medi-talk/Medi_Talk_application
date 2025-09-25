@@ -30,7 +30,7 @@ async function fetchDrugInfo(name: string) {
   }
 }
 
-// ✅ 자동완성 (입력값 기반)
+// 자동완성 (입력값 기반)
 async function fetchDrugSuggestions(query: string) {
   return fetchDrugInfo(query);
 }
@@ -71,7 +71,7 @@ export default function DrugInfoScreen() {
     setSuggestions([]);
   };
 
-  // 🔑 FlatList에 넣을 데이터 구성
+  //FlatList에 넣을 데이터 구성
   const dataToRender = [
     { type: "header" },
     ...(suggestions.length > 0

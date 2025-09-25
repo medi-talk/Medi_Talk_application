@@ -9,17 +9,17 @@ export default function DisposalGuideScreen({ route }: any) {
 
   const item = state.disposals.find((d) => d.id === id);
 
-  // ⚠️ 현재는 더미 데이터 (DB 연동 전)
-  // ⚠️ DB 연동 후 삭제
+  //  현재는 더미 데이터 (DB 연동 전)
+  // DB 연동 후 삭제
   const disposalMethods: Record<string, string> = {
     알약: "포장재 제거 후 내용물만 한 곳에 모아 밀봉하여 처리",
     시럽: "뚜껑을 닫고 종량제 봉투에 밀봉하여 배출",
     주사제: "뚜껑을 닫은 후 전용 수거함에 배출",
-  }; // ⚠️ DB 연동 후 삭제
+  }; // DB 연동 후 삭제
 
   const method =
     disposalMethods[item?.name || ""] || "이 약품에 대한 폐기 방법 정보가 없습니다."; 
-  // ⚠️ DB 연동 후 삭제 → DB에서 가져온 item.method 같은 값으로 대체
+  // DB 연동 후 삭제 → DB에서 가져온 item.method 같은 값으로 대체
 
   if (!item) {
     return (
@@ -38,7 +38,7 @@ export default function DisposalGuideScreen({ route }: any) {
       <View style={styles.section}>
         <Text style={styles.label}>폐기 방법</Text>
         <Text style={styles.value}>
-          {method /* ⚠️ DB 연동 후 삭제 → {item.method} 로 교체 */}
+          {method /* DB 연동 후 삭제 → {item.method} 로 교체 */}
         </Text>
       </View>
 
