@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import { COLORS, SIZES, FONTS } from "./styles/theme";
 
-const SERVICE_KEY = "/=="; // 공공데이터포털 디코딩키
+const SERVICE_KEY = ""; // 공공데이터포털 디코딩키
 
 async function fetchDrugInfo(name: string) {
   const url = `https://apis.data.go.kr/1471000/DrbEasyDrugInfoService/getDrbEasyDrugList?serviceKey=${encodeURIComponent(
