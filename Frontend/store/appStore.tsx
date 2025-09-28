@@ -165,7 +165,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     const timer: TimerItem = {
       ...t,
       isRunning: t.isRunning ?? false,
-      pauseOffset: t.pauseOffset ?? 0, // ✅ 기본값 보장
+      pauseOffset: t.pauseOffset ?? 0, // 기본값 보장
     };
     dispatch({ type: "ADD_TIMER", payload: timer });
   };
