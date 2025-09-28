@@ -19,9 +19,9 @@ export type TimerItem = {
   id: string;
   name: string;
   times: string[];
-  totalSec: number;   // 총 타이머 시간(초 단위)
-  baseTime: number;   // 기준 시각 (Date.now(), ms 단위)
-  isRunning: boolean; // 동작 여부
+  totalSec: number;    // 총 타이머 시간(초 단위)
+  baseTime: number;    // 기준 시각 (Date.now(), ms 단위)
+  isRunning: boolean;  // 동작 여부
   pauseOffset: number; // 일시정지된 누적 시간(초 단위)
 };
 
@@ -165,7 +165,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     const timer: TimerItem = {
       ...t,
       isRunning: t.isRunning ?? false,
-      pauseOffset: t.pauseOffset ?? 0, // 추가
+      pauseOffset: t.pauseOffset ?? 0, // ✅ 기본값 보장
     };
     dispatch({ type: "ADD_TIMER", payload: timer });
   };
