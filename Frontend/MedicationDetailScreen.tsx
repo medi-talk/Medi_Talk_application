@@ -12,6 +12,7 @@ import {
 import { COLORS, SIZES, FONTS } from './styles/theme';
 import { useAppStore } from './store/appStore';
 
+// HH:mm → 오전/오후 hh:mm 변환
 function displayKoreanTime(hhmm: string) {
   const [hStr, mStr] = hhmm.split(":");
   let h = parseInt(hStr, 10);
@@ -56,9 +57,20 @@ export default function MedicationDetailScreen({ route, navigation }: any) {
     ]);
   };
 
-  // 약 추가할 때 times[0]에 고정된 값 저장되므로 그대로 사용
-  const nextAlarm = medication.times?.length
-    ? displayKoreanTime(medication.times[0])
+  // 등록한 시각 + intervalMinutes로 다음 복용 알람 계산
+  const nextAlarm = medication.intervalMinutes && medication.times?.length
+    ? (() => {
+        const base = medication.times[0]; // 첫 등록 시각
+        const [hStr, mStr] = base.split(":");
+        const baseDate = new Date();
+        baseDate.setHours(parseInt(hStr, 10), parseInt(mStr, 10), 0, 0);
+
+        const nextDate = new Date(baseDate.getTime() + medication.intervalMinutes * 60000);
+        const hh = String(nextDate.getHours()).padStart(2, "0");
+        const mm = String(nextDate.getMinutes()).padStart(2, "0");
+
+        return displayKoreanTime(`${hh}:${mm}`);
+      })()
     : null;
 
   return (
@@ -99,6 +111,17 @@ export default function MedicationDetailScreen({ route, navigation }: any) {
 
         <Text style={styles.label}>가족 공개</Text>
         <Text style={styles.value}>{medication.familyShare ? '예' : '아니오'}</Text>
+
+        {/* 새로 추가된 속성들 표시 */}
+        <Text style={styles.label}>카운트 모드</Text>
+        <Text style={styles.value}>
+          {medication.countMode === 'auto' ? '자동 카운트' : '수동 카운트'}
+        </Text>
+
+        <Text style={styles.label}>야간 알림</Text>
+        <Text style={styles.value}>
+          {medication.nightSilent ? 'OFF (야간 끔)' : 'ON (야간 알림 허용)'}
+        </Text>
 
         <View style={styles.rowButtons}>
           <TouchableOpacity

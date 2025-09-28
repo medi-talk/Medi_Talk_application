@@ -28,8 +28,8 @@ function getNextAlarmFromInterval(minutes: number, baseTime: number): string {
 }
 
 // times 배열 기준 → 첫 등록된 시간 고정
-function getNextAlarmTime(times: string[]): string | null {
-  if (!times?.length) return null;
+function getNextAlarmTime(times?: string[]): string | null {
+  if (!times || times.length === 0) return null;
   return displayKoreanTime(times[0]);
 }
 
@@ -40,20 +40,31 @@ export default function MedicationListScreen({ navigation }: any) {
   useEffect(() => {
     const now = Date.now();
     const calc: { [key: string]: string | null } = {};
+
     state.medications.forEach((item) => {
-      calc[item.id] = item.intervalMinutes
-        ? getNextAlarmFromInterval(item.intervalMinutes, now)
-        : getNextAlarmTime(item.times);
+      const mode = item.countMode ?? "auto"; // 기본값 auto
+
+      if (mode === "auto") {
+        if (item.intervalMinutes && Number(item.intervalMinutes) > 0) {
+          calc[item.id] = getNextAlarmFromInterval(Number(item.intervalMinutes), now);
+        } else {
+          calc[item.id] = getNextAlarmTime(item.times ?? []);
+        }
+      } else {
+        calc[item.id] = null; // 수동 모드는 다음 알람 없음
+      }
     });
+
     setNextAlarms(calc);
   }, [state.medications]);
 
   const renderItem = ({ item }: any) => {
-    const nextAlarm = nextAlarms[item.id];
+    const nextAlarm = nextAlarms[item.id] ?? null;
 
-    const intervalText = item.intervalMinutes
-      ? `복용 간격: ${item.intervalMinutes}분`
-      : null;
+    const intervalText =
+      item.countMode === "auto" && item.intervalMinutes
+        ? `복용 간격: ${item.intervalMinutes}분`
+        : null;
 
     return (
       <TouchableOpacity
@@ -76,13 +87,13 @@ export default function MedicationListScreen({ navigation }: any) {
             </Text>
           )}
 
-          {nextAlarm && (
+          {nextAlarm ? (
             <Text style={styles.medicationTimes}>다음 알람: {nextAlarm}</Text>
-          )}
+          ) : null}
 
-          {intervalText && (
+          {intervalText ? (
             <Text style={styles.medicationTimes}>{intervalText}</Text>
-          )}
+          ) : null}
         </View>
         <Icon name="chevron-right" size={24} color={COLORS.gray} />
       </TouchableOpacity>

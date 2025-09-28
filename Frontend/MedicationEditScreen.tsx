@@ -1,4 +1,3 @@
-// MedicationEditScreen.tsx
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
@@ -25,7 +24,6 @@ function displayKoreanTime(hhmm: string) {
   return `${period} ${dispH}:${String(m).padStart(2, "0")}`;
 }
 
-// intervalMinutes 기준으로 다음 알람 1회 계산
 function getNextAlarmFromInterval(minutes: number): string {
   const now = new Date();
   const next = new Date(now.getTime() + minutes * 60000);
@@ -34,7 +32,6 @@ function getNextAlarmFromInterval(minutes: number): string {
   return displayKoreanTime(`${hh}:${mm}`);
 }
 
-// interval 기준 하루치 times 생성
 function generateTimesFromNow(minutes: number): string[] {
   const list: string[] = [];
   const now = new Date();
@@ -49,7 +46,7 @@ function generateTimesFromNow(minutes: number): string[] {
 }
 
 export default function MedicationEditScreen({ route, navigation }: any) {
-  const { state, updateLinked } = useAppStore();
+  const { state, updateLinked, updateTimer } = useAppStore();
 
   const passed = route.params?.medication ?? null;
   const id = route.params?.id ?? passed?.id;
@@ -68,6 +65,9 @@ export default function MedicationEditScreen({ route, navigation }: any) {
     medication?.intervalMinutes ? String(medication.intervalMinutes) : ''
   );
 
+  const [countMode, setCountMode] = useState<'auto' | 'manual'>(medication?.countMode ?? 'auto');
+  const [nightSilent, setNightSilent] = useState(medication?.nightSilent ?? false);
+
   const [nextAlarm, setNextAlarm] = useState<string | null>(null);
 
   const medTypes = ['해열제', '항생제', '진통제', '혈압약'];
@@ -78,7 +78,6 @@ export default function MedicationEditScreen({ route, navigation }: any) {
         { text: '확인', onPress: () => navigation.goBack() },
       ]);
     } else if (medication.intervalMinutes) {
-      // 기존 저장된 값으로 nextAlarm 복원
       setNextAlarm(getNextAlarmFromInterval(medication.intervalMinutes));
     }
   }, [medication, navigation]);
@@ -110,10 +109,21 @@ export default function MedicationEditScreen({ route, navigation }: any) {
       intervalMinutes: minutes,
       alarmFlag,
       familyShare,
-      nextAlarm: fixedNextAlarm, // 고정값 저장
+      countMode,
+      nightSilent,
     });
 
-    setNextAlarm(fixedNextAlarm); // 화면에도 고정 반영
+    const targetTimer = state.timers.find(t => t.id === medication.id);
+    if (targetTimer) {
+      updateTimer({
+        ...targetTimer,
+        totalSec: minutes * 60,
+        baseTime: Date.now(),
+        isRunning: countMode === "auto",
+      });
+    }
+
+    setNextAlarm(fixedNextAlarm);
 
     Alert.alert('완료', '수정되었습니다.', [
       { text: '확인', onPress: () => navigation.goBack() },
@@ -148,11 +158,11 @@ export default function MedicationEditScreen({ route, navigation }: any) {
             onValueChange={(itemValue) => setSelectedType(itemValue)}
             style={[styles.picker, { color: COLORS.darkGray }]}
             dropdownIconColor={COLORS.primary}
-            itemStyle={{ color: COLORS.darkGray }}
+            itemStyle={{ color: COLORS.darkGray }} // ✅ 여기만 수정
           >
-            <Picker.Item label="약 종류를 선택하세요" value="" color={COLORS.gray} />
+            <Picker.Item label="약 종류를 선택하세요" value="" />
             {medTypes.map((t) => (
-              <Picker.Item key={t} label={t} value={t} color={COLORS.darkGray} />
+              <Picker.Item key={t} label={t} value={t} />
             ))}
           </Picker>
         </View>
@@ -198,6 +208,32 @@ export default function MedicationEditScreen({ route, navigation }: any) {
           <Switch value={familyShare} onValueChange={setFamilyShare} />
         </View>
 
+        <Text style={styles.label}>카운트 모드</Text>
+        <View style={styles.row}>
+          <TouchableOpacity
+            style={[styles.toggleBtn, countMode === 'auto' && { backgroundColor: COLORS.primary }]}
+            onPress={() => setCountMode('auto')}
+          >
+            <Text style={{ color: countMode === 'auto' ? COLORS.white : COLORS.darkGray }}>
+              자동 카운트
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.toggleBtn, countMode === 'manual' && { backgroundColor: COLORS.primary }]}
+            onPress={() => setCountMode('manual')}
+          >
+            <Text style={{ color: countMode === 'manual' ? COLORS.white : COLORS.darkGray }}>
+              수동 카운트
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <Text style={styles.label}>야간 알림</Text>
+        <View style={styles.switchRow}>
+          <Text style={styles.switchLabel}>새벽 시간 알림 끄기</Text>
+          <Switch value={nightSilent} onValueChange={setNightSilent} />
+        </View>
+
         <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
           <Text style={styles.saveBtnText}>저장</Text>
         </TouchableOpacity>
@@ -239,6 +275,15 @@ const styles = StyleSheet.create({
     borderRadius: SIZES.radius,
     padding: 12,
     marginBottom: 12,
+  },
+  row: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  toggleBtn: {
+    flex: 1,
+    marginHorizontal: 4,
+    borderRadius: SIZES.radius,
+    padding: 12,
+    alignItems: 'center',
+    backgroundColor: COLORS.lightGray,
   },
   switchLabel: { ...FONTS.p, color: COLORS.darkGray },
   saveBtn: {

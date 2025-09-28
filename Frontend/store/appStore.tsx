@@ -1,4 +1,3 @@
-// appStore.ts
 import React, { createContext, useContext, useReducer } from "react";
 
 export type MedicationItem = {
@@ -8,19 +7,22 @@ export type MedicationItem = {
   startDate: string;
   endDate: string;
   expiry: string;
-  times: string[];            // 직접 입력한 알람 시간
-  intervalMinutes?: number;   // 복용 간격 (선택, 분 단위)
+  times: string[];
+  intervalMinutes?: number;
   alarmFlag: boolean;
   familyShare: boolean;
+  countMode: "auto" | "manual";
+  nightSilent: boolean;
 };
 
-// TimerItem 구조 변경
 export type TimerItem = {
   id: string;
   name: string;
   times: string[];
   totalSec: number;   // 총 타이머 시간(초 단위)
-  baseTime: number;   // 등록 시각 (Date.now() 값, ms 단위)
+  baseTime: number;   // 기준 시각 (Date.now(), ms 단위)
+  isRunning: boolean; // 동작 여부
+  pauseOffset: number; // 일시정지된 누적 시간(초 단위)
 };
 
 export type DisposalItem = {
@@ -29,7 +31,6 @@ export type DisposalItem = {
   expiry: string;
 };
 
-// User 타입
 export type User = {
   id: string;
   name: string;
@@ -161,7 +162,12 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
   };
 
   const addTimer = (t: TimerItem) => {
-    dispatch({ type: "ADD_TIMER", payload: t });
+    const timer: TimerItem = {
+      ...t,
+      isRunning: t.isRunning ?? false,
+      pauseOffset: t.pauseOffset ?? 0, // 추가
+    };
+    dispatch({ type: "ADD_TIMER", payload: timer });
   };
 
   const updateTimer = (t: TimerItem) => {

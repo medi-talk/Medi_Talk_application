@@ -48,6 +48,9 @@ export default function MedicationAddScreen({ navigation }: any) {
 
   const [intervalMinutes, setIntervalMinutes] = useState('');
 
+  const [countMode, setCountMode] = useState<'auto' | 'manual'>('auto');
+  const [nightSilent, setNightSilent] = useState(false);
+
   const medTypes = ['해열제', '항생제', '진통제', '혈압약'];
 
   const handleSave = () => {
@@ -60,14 +63,19 @@ export default function MedicationAddScreen({ navigation }: any) {
       return;
     }
 
-    if (!intervalMinutes.trim() || Number(intervalMinutes) <= 0) {
-      Alert.alert('알림', '복용 간격(분)을 입력하세요.');
-      return;
+    if (mode === 'period') {
+      if (!intervalMinutes.trim() || Number(intervalMinutes) <= 0) {
+        Alert.alert('알림', '복용 간격(분)을 입력하세요.');
+        return;
+      }
     }
 
     const id = Date.now().toString();
     const minutes = Number(intervalMinutes);
-    const finalTimes = generateTimesFromIntervalMinutes(minutes);
+    const finalTimes =
+      intervalMinutes.trim() && Number(intervalMinutes) > 0
+        ? generateTimesFromIntervalMinutes(minutes)
+        : [];
 
     addLinked({
       id,
@@ -77,19 +85,24 @@ export default function MedicationAddScreen({ navigation }: any) {
       endDate: mode === 'period' ? fmt(endDate) : '',
       expiry: mode === 'expiry' ? fmt(expiryDate) : '',
       times: finalTimes,
-      intervalMinutes: minutes,
+      intervalMinutes: minutes || 0,
       alarmFlag,
       familyShare,
+      countMode,
+      nightSilent,
     });
 
-    
-    addTimer({
-      id,
-      name: medicationName.trim(),
-      times: finalTimes,
-      totalSec: minutes * 60,   // 분 → 초 변환
-      baseTime: Date.now(),     // 등록 시각
-    });
+    if (minutes > 0) {
+      addTimer({
+        id,
+        name: medicationName.trim(),
+        times: finalTimes,
+        totalSec: minutes * 60,
+        baseTime: Date.now(),
+        isRunning: countMode === 'auto',
+        pauseOffset: 0, // ✅ 추가됨
+      });
+    }
 
     addDisposal({
       id,
@@ -129,10 +142,11 @@ export default function MedicationAddScreen({ navigation }: any) {
             onValueChange={(itemValue) => setSelectedType(itemValue)}
             style={[styles.picker, { color: COLORS.darkGray }]}
             dropdownIconColor={COLORS.primary}
+            itemStyle={{ color: COLORS.darkGray }}
           >
-            <Picker.Item label="약 종류를 선택하세요" value="" color={COLORS.gray} />
+            <Picker.Item label="약 종류를 선택하세요" value="" />
             {medTypes.map((t) => (
-              <Picker.Item key={t} label={t} value={t} color={COLORS.darkGray} />
+              <Picker.Item key={t} label={t} value={t} />
             ))}
           </Picker>
         </View>
@@ -214,10 +228,31 @@ export default function MedicationAddScreen({ navigation }: any) {
           keyboardType="numeric"
         />
 
+        <Text style={styles.label}>타이머 모드</Text>
+        <View style={styles.row}>
+          <TouchableOpacity
+            style={[styles.toggleBtn, countMode === 'auto' && { backgroundColor: COLORS.primary }]}
+            onPress={() => setCountMode('auto')}
+          >
+            <Text style={{ color: countMode === 'auto' ? COLORS.white : COLORS.darkGray }}>자동 카운트</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.toggleBtn, countMode === 'manual' && { backgroundColor: COLORS.primary }]}
+            onPress={() => setCountMode('manual')}
+          >
+            <Text style={{ color: countMode === 'manual' ? COLORS.white : COLORS.darkGray }}>수동 카운트</Text>
+          </TouchableOpacity>
+        </View>
+
         <Text style={styles.label}>알림 설정</Text>
         <View style={styles.switchRow}>
           <Text style={styles.switchLabel}>복용 알림</Text>
           <Switch value={alarmFlag} onValueChange={setAlarmFlag} />
+        </View>
+
+        <View style={styles.switchRow}>
+          <Text style={styles.switchLabel}>새벽 알림 끄기</Text>
+          <Switch value={nightSilent} onValueChange={setNightSilent} />
         </View>
 
         <Text style={styles.label}>가족 공개</Text>

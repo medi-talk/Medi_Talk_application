@@ -5,6 +5,7 @@
   "dependencies": {
     "@react-native-picker/picker": "^2.11.2",
     "@react-navigation/native-stack": "^7.3.26",
+    "react-native-background-timer": "^2.4.1",
     "react-native-screens": "^4.16.0"
   }
 }
