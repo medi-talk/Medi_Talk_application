@@ -8,18 +8,17 @@ export default function DisposalGuideScreen({ route }: any) {
   const { state } = useAppStore();
 
   const item = state.disposals.find((d) => d.id === id);
+  const medication = state.medications.find((m) => m.id === id); // 약 정보 찾아오기
 
-  //  현재는 더미 데이터 (DB 연동 전)
-  // DB 연동 후 삭제
+  // 현재는 더미 데이터 (DB 연동 전)
   const disposalMethods: Record<string, string> = {
     알약: "포장재 제거 후 내용물만 한 곳에 모아 밀봉하여 처리",
     시럽: "뚜껑을 닫고 종량제 봉투에 밀봉하여 배출",
     주사제: "뚜껑을 닫은 후 전용 수거함에 배출",
-  }; // DB 연동 후 삭제
+  };
 
   const method =
-    disposalMethods[item?.name || ""] || "이 약품에 대한 폐기 방법 정보가 없습니다."; 
-  // DB 연동 후 삭제 → DB에서 가져온 item.method 같은 값으로 대체
+    disposalMethods[item?.name || ""] || "이 약품에 대한 폐기 방법 정보가 없습니다.";
 
   if (!item) {
     return (
@@ -34,15 +33,16 @@ export default function DisposalGuideScreen({ route }: any) {
       {/* 약 이름 */}
       <Text style={styles.title}>{item.name}</Text>
 
+      {/* 약 종류 */}
+      <Text style={styles.subTitle}>종류: {medication?.type ?? "정보 없음"}</Text>
+
       {/* 폐기 방법 */}
       <View style={styles.section}>
         <Text style={styles.label}>폐기 방법</Text>
-        <Text style={styles.value}>
-          {method /* DB 연동 후 삭제 → {item.method} 로 교체 */}
-        </Text>
+        <Text style={styles.value}>{method}</Text>
       </View>
 
-      {/* 폐기 장소 (고정) */}
+      {/* 폐기 장소 */}
       <View style={styles.section}>
         <Text style={styles.label}>폐기 장소</Text>
         <Text style={styles.value}>
@@ -50,7 +50,7 @@ export default function DisposalGuideScreen({ route }: any) {
         </Text>
       </View>
 
-      {/* 주의사항 (고정) */}
+      {/* 주의사항 */}
       <View style={styles.noticeBox}>
         <Text style={styles.noticeTitle}>주의</Text>
         <Text style={styles.noticeText}>
@@ -71,6 +71,11 @@ const styles = StyleSheet.create({
   title: {
     ...FONTS.h1,
     color: COLORS.primary,
+    marginBottom: 10,
+  },
+  subTitle: {
+    ...FONTS.h3,
+    color: COLORS.darkGray,
     marginBottom: 20,
   },
   section: {

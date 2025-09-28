@@ -13,8 +13,39 @@ import { useAppStore } from './store/appStore';
 function fmt(date: Date) {
   return date.toISOString().split('T')[0];
 }
-function fmtTime(date: Date) {
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+function displayKoreanTime(hhmm: string) {
+  const [hStr, mStr] = hhmm.split(":");
+  let h = parseInt(hStr, 10);
+  const m = parseInt(mStr, 10);
+  const am = h < 12;
+  const period = am ? "오전" : "오후";
+  let dispH = h % 12;
+  if (dispH === 0) dispH = 12;
+  return `${period} ${dispH}:${String(m).padStart(2, "0")}`;
+}
+
+// intervalMinutes 기준으로 다음 알람 1회 계산
+function getNextAlarmFromInterval(minutes: number): string {
+  const now = new Date();
+  const next = new Date(now.getTime() + minutes * 60000);
+  const hh = String(next.getHours()).padStart(2, '0');
+  const mm = String(next.getMinutes()).padStart(2, '0');
+  return displayKoreanTime(`${hh}:${mm}`);
+}
+
+// interval 기준 하루치 times 생성
+function generateTimesFromNow(minutes: number): string[] {
+  const list: string[] = [];
+  const now = new Date();
+  let current = new Date(now);
+  for (let m = 0; m < 1440; m += minutes) {
+    const hh = String(current.getHours()).padStart(2, '0');
+    const mm = String(current.getMinutes()).padStart(2, '0');
+    list.push(`${hh}:${mm}`);
+    current = new Date(current.getTime() + minutes * 60000);
+  }
+  return list;
 }
 
 export default function MedicationEditScreen({ route, navigation }: any) {
@@ -29,37 +60,28 @@ export default function MedicationEditScreen({ route, navigation }: any) {
   const [expiryDate, setExpiryDate] = useState(
     medication?.expiry ? new Date(medication.expiry) : new Date()
   );
-  const [times, setTimes] = useState<string[]>(medication?.times ?? []);
-  const [tempTime, setTempTime] = useState(new Date());
-  const [showTimePicker, setShowTimePicker] = useState(false);
   const [alarmFlag, setAlarmFlag] = useState(medication?.alarmFlag ?? true);
   const [familyShare, setFamilyShare] = useState(medication?.familyShare ?? false);
   const [showExpiryPicker, setShowExpiryPicker] = useState(false);
 
-  // 데모용 약 종류 (DB 연동 시 삭제)
+  const [intervalMinutes, setIntervalMinutes] = useState(
+    medication?.intervalMinutes ? String(medication.intervalMinutes) : ''
+  );
+
+  const [nextAlarm, setNextAlarm] = useState<string | null>(null);
+
   const medTypes = ['해열제', '항생제', '진통제', '혈압약'];
 
-  // ✅ medication이 없으면 Alert 띄우고 뒤로가기
   useEffect(() => {
     if (!medication) {
       Alert.alert('오류', '수정할 약 정보를 찾을 수 없습니다.', [
         { text: '확인', onPress: () => navigation.goBack() },
       ]);
+    } else if (medication.intervalMinutes) {
+      // 기존 저장된 값으로 nextAlarm 복원
+      setNextAlarm(getNextAlarmFromInterval(medication.intervalMinutes));
     }
   }, [medication, navigation]);
-
-  const addTime = () => {
-    const timeStr = fmtTime(tempTime);
-    if (times.includes(timeStr)) {
-      Alert.alert('알림', '이미 추가된 시간입니다.');
-      return;
-    }
-    setTimes(prev => [...prev, timeStr]);
-  };
-
-  const removeTime = (t: string) => {
-    setTimes(prev => prev.filter(x => x !== t));
-  };
 
   const handleSave = () => {
     if (!medicationName.trim()) {
@@ -70,30 +92,35 @@ export default function MedicationEditScreen({ route, navigation }: any) {
       Alert.alert('알림', '약 종류를 선택하세요.');
       return;
     }
-    if (times.length === 0) {
-      Alert.alert('알림', '복용 시간을 최소 1개 이상 추가하세요.');
+    if (!intervalMinutes.trim() || Number(intervalMinutes) <= 0) {
+      Alert.alert('알림', '복용 간격을 입력하세요.');
       return;
     }
+
+    const minutes = Number(intervalMinutes);
+    const finalTimes = generateTimesFromNow(minutes);
+    const fixedNextAlarm = getNextAlarmFromInterval(minutes);
 
     updateLinked({
       ...medication,
       name: medicationName.trim(),
       type: selectedType,
       expiry: fmt(expiryDate),
-      times,
+      times: finalTimes,
+      intervalMinutes: minutes,
       alarmFlag,
       familyShare,
+      nextAlarm: fixedNextAlarm, // 고정값 저장
     });
+
+    setNextAlarm(fixedNextAlarm); // 화면에도 고정 반영
 
     Alert.alert('완료', '수정되었습니다.', [
       { text: '확인', onPress: () => navigation.goBack() },
     ]);
   };
 
-  if (!medication) {
-    // 훅 실행 후 렌더만 막음
-    return null;
-  }
+  if (!medication) return null;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -130,40 +157,18 @@ export default function MedicationEditScreen({ route, navigation }: any) {
           </Picker>
         </View>
 
-        <Text style={styles.label}>복용 시간</Text>
-        <View style={styles.row}>
-          <TouchableOpacity
-            style={[styles.input, { flex: 1, justifyContent: 'center' }]}
-            onPress={() => setShowTimePicker(true)}
-          >
-            <Text style={{ color: COLORS.darkGray }}>{fmtTime(tempTime)}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.addBtn} onPress={addTime}>
-            <Icon name="plus" size={22} color={COLORS.white} />
-          </TouchableOpacity>
-        </View>
+        <Text style={styles.label}>복용 간격 (분)</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="예: 180"
+          placeholderTextColor={COLORS.gray}
+          value={intervalMinutes}
+          onChangeText={setIntervalMinutes}
+          keyboardType="numeric"
+        />
 
-        {showTimePicker && (
-          <DateTimePicker
-            value={tempTime}
-            mode="time"
-            is24Hour={false}
-            display="spinner"
-            onChange={(_, d) => {
-              if (d) setTempTime(d);
-              setShowTimePicker(false);
-            }}
-          />
-        )}
-
-        {times.map((t, i) => (
-          <View key={i} style={styles.timeCard}>
-            <Text style={styles.timeText}>{t}</Text>
-            <TouchableOpacity onPress={() => removeTime(t)}>
-              <Icon name="close" size={20} color={COLORS.gray} />
-            </TouchableOpacity>
-          </View>
-        ))}
+        <Text style={styles.label}>다음 복용 알람</Text>
+        <Text style={styles.value}>{nextAlarm ?? '없음'}</Text>
 
         <Text style={styles.label}>유통기한</Text>
         <TouchableOpacity style={styles.input} onPress={() => setShowExpiryPicker(true)}>
@@ -211,6 +216,7 @@ const styles = StyleSheet.create({
   title: { ...FONTS.h2, color: COLORS.darkGray, textAlign: 'center' },
   container: { padding: SIZES.padding, paddingBottom: 40 },
   label: { ...FONTS.h3, color: COLORS.darkGray, marginTop: 20, marginBottom: 8 },
+  value: { ...FONTS.p, color: COLORS.gray, marginTop: 4 },
   input: {
     backgroundColor: COLORS.lightGray,
     borderRadius: SIZES.radius,
@@ -225,26 +231,6 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   picker: { height: 50, width: '100%' },
-  row: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-  addBtn: {
-    marginLeft: 8,
-    backgroundColor: COLORS.primary,
-    borderRadius: SIZES.radius,
-    padding: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  timeCard: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    backgroundColor: COLORS.white,
-    padding: 12,
-    borderRadius: SIZES.radius,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: COLORS.lightGray,
-  },
-  timeText: { ...FONTS.p, color: COLORS.darkGray },
   switchRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

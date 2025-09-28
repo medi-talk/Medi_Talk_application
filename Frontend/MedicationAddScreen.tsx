@@ -1,3 +1,4 @@
+// MedicationAddScreen.tsx
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
@@ -12,65 +13,42 @@ import { useAppStore } from './store/appStore';
 function fmt(date: Date) {
   return date.toISOString().split('T')[0];
 }
-function fmtTime(date: Date) {
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-}
 
-function calcNextRemainingSec(times: string[]): number {
-  if (!times.length) return 0;
+function generateTimesFromIntervalMinutes(minutes: number): string[] {
+  const list: string[] = [];
   const now = new Date();
-
-  const todayTimes = times.map(t => {
-    const [hourStr, minuteStr] = t.replace(/[^0-9:]/g, "").split(":");
-    const d = new Date();
-    d.setHours(parseInt(hourStr, 10));
-    d.setMinutes(parseInt(minuteStr, 10));
-    d.setSeconds(0);
-    return d;
-  });
-
-  let next = todayTimes.find(d => d.getTime() > now.getTime());
-  if (!next) {
-    next = new Date(todayTimes[0].getTime() + 24 * 60 * 60 * 1000);
+  let current = new Date(now);
+  const endOfDay = new Date(now);
+  endOfDay.setDate(now.getDate() + 1);
+  while (current < endOfDay) {
+    const hh = String(current.getHours()).padStart(2, '0');
+    const mm = String(current.getMinutes()).padStart(2, '0');
+    list.push(`${hh}:${mm}`);
+    current = new Date(current.getTime() + minutes * 60000);
   }
-
-  return Math.max(0, Math.floor((next.getTime() - now.getTime()) / 1000));
+  return list;
 }
 
 export default function MedicationAddScreen({ navigation }: any) {
   const { addLinked, addTimer, addDisposal } = useAppStore();
 
   const [medicationName, setMedicationName] = useState('');
-  const [selectedType, setSelectedType] = useState(''); // 약 종류 state
+  const [selectedType, setSelectedType] = useState('');
   const [alarmFlag, setAlarmFlag] = useState(true);
-
-  const [startDate] = useState(new Date());
-  const [endDate] = useState(new Date());
-
-  const [expiryDate, setExpiryDate] = useState(new Date());
-  const [showExpiryPicker, setShowExpiryPicker] = useState(false);
-
-  const [times, setTimes] = useState<string[]>([]);
-  const [tempTime, setTempTime] = useState(new Date());
-  const [showTimePicker, setShowTimePicker] = useState(false);
-
   const [familyShare, setFamilyShare] = useState(false);
 
-  // 데모용 약 종류 (DB 연동 시 삭제 예정)
+  const [mode, setMode] = useState<'period' | 'expiry'>('period');
+  const [startDate, setStartDate] = useState(new Date());
+  const [endDate, setEndDate] = useState(new Date());
+  const [expiryDate, setExpiryDate] = useState(new Date());
+
+  const [showStartPicker, setShowStartPicker] = useState(false);
+  const [showEndPicker, setShowEndPicker] = useState(false);
+  const [showExpiryPicker, setShowExpiryPicker] = useState(false);
+
+  const [intervalMinutes, setIntervalMinutes] = useState('');
+
   const medTypes = ['해열제', '항생제', '진통제', '혈압약'];
-
-  const addTime = () => {
-    const timeStr = fmtTime(tempTime);
-    if (times.includes(timeStr)) {
-      Alert.alert('알림', '이미 추가된 시간입니다.');
-      return;
-    }
-    setTimes(prev => [...prev, timeStr]);
-  };
-
-  const removeTime = (t: string) => {
-    setTimes(prev => prev.filter(x => x !== t));
-  };
 
   const handleSave = () => {
     if (!medicationName.trim()) {
@@ -81,36 +59,42 @@ export default function MedicationAddScreen({ navigation }: any) {
       Alert.alert('알림', '약 종류를 선택하세요.');
       return;
     }
-    if (times.length === 0) {
-      Alert.alert('알림', '복용 시간을 최소 1개 이상 추가하세요.');
+
+    if (!intervalMinutes.trim() || Number(intervalMinutes) <= 0) {
+      Alert.alert('알림', '복용 간격(분)을 입력하세요.');
       return;
     }
 
     const id = Date.now().toString();
+    const minutes = Number(intervalMinutes);
+    const finalTimes = generateTimesFromIntervalMinutes(minutes);
 
     addLinked({
       id,
       name: medicationName.trim(),
-      startDate: fmt(startDate),
-      endDate: fmt(endDate),
-      expiry: fmt(expiryDate),
-      times,
+      type: selectedType,
+      startDate: mode === 'period' ? fmt(startDate) : '',
+      endDate: mode === 'period' ? fmt(endDate) : '',
+      expiry: mode === 'expiry' ? fmt(expiryDate) : '',
+      times: finalTimes,
+      intervalMinutes: minutes,
       alarmFlag,
       familyShare,
-      type: selectedType,
     });
 
+    
     addTimer({
       id,
       name: medicationName.trim(),
-      times,
-      nextRemainingSec: calcNextRemainingSec(times),
+      times: finalTimes,
+      totalSec: minutes * 60,   // 분 → 초 변환
+      baseTime: Date.now(),     // 등록 시각
     });
 
     addDisposal({
       id,
       name: medicationName.trim(),
-      expiry: fmt(expiryDate),
+      expiry: mode === 'expiry' ? fmt(expiryDate) : fmt(endDate),
     });
 
     Alert.alert('완료', '약이 등록되었습니다.', [
@@ -121,7 +105,6 @@ export default function MedicationAddScreen({ navigation }: any) {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" />
-
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Icon name="arrow-left" size={24} color={COLORS.darkGray} />
@@ -129,7 +112,6 @@ export default function MedicationAddScreen({ navigation }: any) {
         <Text style={styles.title}>복용 약 추가</Text>
         <View style={{ width: 40 }} />
       </View>
-
       <ScrollView contentContainerStyle={styles.container}>
         <Text style={styles.label}>어떤 약을 드시나요?</Text>
         <TextInput
@@ -147,7 +129,6 @@ export default function MedicationAddScreen({ navigation }: any) {
             onValueChange={(itemValue) => setSelectedType(itemValue)}
             style={[styles.picker, { color: COLORS.darkGray }]}
             dropdownIconColor={COLORS.primary}
-            itemStyle={{ color: COLORS.darkGray }}
           >
             <Picker.Item label="약 종류를 선택하세요" value="" color={COLORS.gray} />
             {medTypes.map((t) => (
@@ -156,56 +137,82 @@ export default function MedicationAddScreen({ navigation }: any) {
           </Picker>
         </View>
 
-        <Text style={styles.label}>복용 시간 추가</Text>
+        <Text style={styles.label}>복용 방식</Text>
         <View style={styles.row}>
           <TouchableOpacity
-            style={[styles.input, { flex: 1, justifyContent: 'center' }]}
-            onPress={() => setShowTimePicker(true)}
+            style={[styles.toggleBtn, mode === 'period' && { backgroundColor: COLORS.primary }]}
+            onPress={() => setMode('period')}
           >
-            <Text style={{ color: COLORS.darkGray }}>{fmtTime(tempTime)}</Text>
+            <Text style={{ color: mode === 'period' ? COLORS.white : COLORS.darkGray }}>복용 기간</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.addBtn} onPress={addTime}>
-            <Icon name="plus" size={22} color={COLORS.white} />
+          <TouchableOpacity
+            style={[styles.toggleBtn, mode === 'expiry' && { backgroundColor: COLORS.primary }]}
+            onPress={() => setMode('expiry')}
+          >
+            <Text style={{ color: mode === 'expiry' ? COLORS.white : COLORS.darkGray }}>유통기한</Text>
           </TouchableOpacity>
         </View>
 
-        {showTimePicker && (
-          <DateTimePicker
-            value={tempTime}
-            mode="time"
-            is24Hour={false}
-            display="spinner"
-            onChange={(_, d) => {
-              if (d) setTempTime(d);
-              setShowTimePicker(false);
-            }}
-          />
-        )}
-
-        {times.map((t, i) => (
-          <View key={i} style={styles.timeCard}>
-            <Text style={styles.timeText}>{t}</Text>
-            <TouchableOpacity onPress={() => removeTime(t)}>
-              <Icon name="close" size={20} color={COLORS.gray} />
+        {mode === 'period' ? (
+          <View style={styles.row}>
+            <TouchableOpacity style={[styles.input, { flex: 1 }]} onPress={() => setShowStartPicker(true)}>
+              <Text style={{ color: COLORS.darkGray }}>{fmt(startDate)}</Text>
             </TouchableOpacity>
+            <Text style={{ marginHorizontal: 8, alignSelf: 'center', color: COLORS.darkGray }}>~</Text>
+            <TouchableOpacity style={[styles.input, { flex: 1 }]} onPress={() => setShowEndPicker(true)}>
+              <Text style={{ color: COLORS.darkGray }}>{fmt(endDate)}</Text>
+            </TouchableOpacity>
+            {showStartPicker && (
+              <DateTimePicker
+                value={startDate}
+                mode="date"
+                display="spinner"
+                onChange={(_, d) => {
+                  if (d) setStartDate(d);
+                  setShowStartPicker(false);
+                }}
+              />
+            )}
+            {showEndPicker && (
+              <DateTimePicker
+                value={endDate}
+                mode="date"
+                display="spinner"
+                onChange={(_, d) => {
+                  if (d) setEndDate(d);
+                  setShowEndPicker(false);
+                }}
+              />
+            )}
           </View>
-        ))}
-
-        <Text style={styles.label}>유통기한</Text>
-        <TouchableOpacity style={styles.input} onPress={() => setShowExpiryPicker(true)}>
-          <Text style={{ color: COLORS.darkGray }}>{fmt(expiryDate)}</Text>
-        </TouchableOpacity>
-        {showExpiryPicker && (
-          <DateTimePicker
-            value={expiryDate}
-            mode="date"
-            display="spinner"
-            onChange={(_, d) => {
-              if (d) setExpiryDate(d);
-              setShowExpiryPicker(false);
-            }}
-          />
+        ) : (
+          <>
+            <TouchableOpacity style={styles.input} onPress={() => setShowExpiryPicker(true)}>
+              <Text style={{ color: COLORS.darkGray }}>{fmt(expiryDate)}</Text>
+            </TouchableOpacity>
+            {showExpiryPicker && (
+              <DateTimePicker
+                value={expiryDate}
+                mode="date"
+                display="spinner"
+                onChange={(_, d) => {
+                  if (d) setExpiryDate(d);
+                  setShowExpiryPicker(false);
+                }}
+              />
+            )}
+          </>
         )}
+
+        <Text style={styles.label}>복용 간격 (분)</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="예: 180 (3시간마다)"
+          placeholderTextColor={COLORS.gray}
+          value={intervalMinutes}
+          onChangeText={setIntervalMinutes}
+          keyboardType="numeric"
+        />
 
         <Text style={styles.label}>알림 설정</Text>
         <View style={styles.switchRow}>
@@ -252,25 +259,14 @@ const styles = StyleSheet.create({
   },
   picker: { height: 50, width: '100%' },
   row: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-  addBtn: {
-    marginLeft: 8,
-    backgroundColor: COLORS.primary,
+  toggleBtn: {
+    flex: 1,
+    marginHorizontal: 4,
     borderRadius: SIZES.radius,
-    padding: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  timeCard: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    backgroundColor: COLORS.white,
     padding: 12,
-    borderRadius: SIZES.radius,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: COLORS.lightGray,
+    alignItems: 'center',
+    backgroundColor: COLORS.lightGray,
   },
-  timeText: { ...FONTS.p, color: COLORS.darkGray },
   switchRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

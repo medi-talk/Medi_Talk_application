@@ -1,3 +1,4 @@
+// MedicationDetailScreen.tsx
 import React from 'react';
 import {
   View,
@@ -5,18 +6,27 @@ import {
   StyleSheet,
   SafeAreaView,
   StatusBar,
-  FlatList,
   TouchableOpacity,
   Alert,
 } from 'react-native';
 import { COLORS, SIZES, FONTS } from './styles/theme';
 import { useAppStore } from './store/appStore';
 
-export default function MedicationDetailScreen({ route, navigation }: any) {
-  const passed = route.params?.medication ?? null;   
-  const passedId = route.params?.id ?? passed?.id;   
-  const { state, removeLinked } = useAppStore();
+function displayKoreanTime(hhmm: string) {
+  const [hStr, mStr] = hhmm.split(":");
+  let h = parseInt(hStr, 10);
+  const m = parseInt(mStr, 10);
+  const am = h < 12;
+  const period = am ? "오전" : "오후";
+  let dispH = h % 12;
+  if (dispH === 0) dispH = 12;
+  return `${period} ${dispH}:${String(m).padStart(2, "0")}`;
+}
 
+export default function MedicationDetailScreen({ route, navigation }: any) {
+  const passed = route.params?.medication ?? null;
+  const passedId = route.params?.id ?? passed?.id;
+  const { state, removeLinked } = useAppStore();
 
   const medication =
     (passedId ? state.medications.find(m => m.id === passedId) : null) ?? passed ?? null;
@@ -39,12 +49,17 @@ export default function MedicationDetailScreen({ route, navigation }: any) {
         text: '삭제',
         style: 'destructive',
         onPress: () => {
-          removeLinked(medication.id); 
+          removeLinked(medication.id);
           navigation.goBack();
         },
       },
     ]);
   };
+
+  // 약 추가할 때 times[0]에 고정된 값 저장되므로 그대로 사용
+  const nextAlarm = medication.times?.length
+    ? displayKoreanTime(medication.times[0])
+    : null;
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -52,24 +67,32 @@ export default function MedicationDetailScreen({ route, navigation }: any) {
       <View style={styles.container}>
         <Text style={styles.title}>{medication.name}</Text>
 
-        {/* 약 종류 표시 (없으면 '선택 안 함') */}
         <Text style={styles.label}>약 종류</Text>
         <Text style={styles.value}>{medication.type || '선택 안 함'}</Text>
 
-        <Text style={styles.label}>복용 기간</Text>
-        <Text style={styles.value}>
-          {medication.startDate} ~ {medication.endDate}
-        </Text>
+        {medication.startDate && medication.endDate ? (
+          <>
+            <Text style={styles.label}>복용 기간</Text>
+            <Text style={styles.value}>
+              {medication.startDate} ~ {medication.endDate}
+            </Text>
+          </>
+        ) : (
+          <>
+            <Text style={styles.label}>유통기한</Text>
+            <Text style={styles.value}>{medication.expiry}</Text>
+          </>
+        )}
 
-        <Text style={styles.label}>복용 시간</Text>
-        <FlatList
-          data={medication.times}
-          keyExtractor={(t, i) => i.toString()}
-          renderItem={({ item }) => <Text style={styles.value}>- {item}</Text>}
-        />
+        {medication.intervalMinutes ? (
+          <>
+            <Text style={styles.label}>복용 간격</Text>
+            <Text style={styles.value}>{medication.intervalMinutes}분</Text>
+          </>
+        ) : null}
 
-        <Text style={styles.label}>유통기한</Text>
-        <Text style={styles.value}>{medication.expiry}</Text>
+        <Text style={styles.label}>다음 복용 알람</Text>
+        <Text style={styles.value}>{nextAlarm ?? '없음'}</Text>
 
         <Text style={styles.label}>알림</Text>
         <Text style={styles.value}>{medication.alarmFlag ? 'ON' : 'OFF'}</Text>

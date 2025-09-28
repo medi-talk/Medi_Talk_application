@@ -1,4 +1,5 @@
-import React from 'react';
+// MedicationListScreen.tsx
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, SafeAreaView,
   FlatList, StatusBar
@@ -7,29 +8,86 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS, SIZES, FONTS } from './styles/theme';
 import { useAppStore } from './store/appStore';
 
+function displayKoreanTime(hhmm: string) {
+  const [hStr, mStr] = hhmm.split(":");
+  let h = parseInt(hStr, 10);
+  const m = parseInt(mStr, 10);
+  const am = h < 12;
+  const period = am ? "오전" : "오후";
+  let dispH = h % 12;
+  if (dispH === 0) dispH = 12;
+  return `${period} ${dispH}:${String(m).padStart(2, "0")}`;
+}
+
+// intervalMinutes 기준 다음 알람 (등록 시각을 기준으로 1회만 고정)
+function getNextAlarmFromInterval(minutes: number, baseTime: number): string {
+  const next = new Date(baseTime + minutes * 60000);
+  const hh = String(next.getHours()).padStart(2, '0');
+  const mm = String(next.getMinutes()).padStart(2, '0');
+  return displayKoreanTime(`${hh}:${mm}`);
+}
+
+// times 배열 기준 → 첫 등록된 시간 고정
+function getNextAlarmTime(times: string[]): string | null {
+  if (!times?.length) return null;
+  return displayKoreanTime(times[0]);
+}
+
 export default function MedicationListScreen({ navigation }: any) {
   const { state } = useAppStore();
+  const [nextAlarms, setNextAlarms] = useState<{ [key: string]: string | null }>({});
 
-  const renderItem = ({ item }: any) => (
-    <TouchableOpacity
-      style={styles.card}
-      onPress={() => navigation.navigate('MedicationDetail', { medication: item })}
-    >
-      <View style={styles.iconContainer}>
-        <Icon name="pill" size={24} color={COLORS.primary} />
-      </View>
-      <View style={styles.textContainer}>
-        <Text style={styles.medicationName}>{item.name}</Text>
-        <Text style={styles.medicationPeriod}>
-          {item.startDate} ~ {item.endDate}
-        </Text>
-        <Text style={styles.medicationTimes}>
-          복용 시간: {item.times.join(', ')}
-        </Text>
-      </View>
-      <Icon name="chevron-right" size={24} color={COLORS.gray} />
-    </TouchableOpacity>
-  );
+  useEffect(() => {
+    const now = Date.now();
+    const calc: { [key: string]: string | null } = {};
+    state.medications.forEach((item) => {
+      calc[item.id] = item.intervalMinutes
+        ? getNextAlarmFromInterval(item.intervalMinutes, now)
+        : getNextAlarmTime(item.times);
+    });
+    setNextAlarms(calc);
+  }, [state.medications]);
+
+  const renderItem = ({ item }: any) => {
+    const nextAlarm = nextAlarms[item.id];
+
+    const intervalText = item.intervalMinutes
+      ? `복용 간격: ${item.intervalMinutes}분`
+      : null;
+
+    return (
+      <TouchableOpacity
+        style={styles.card}
+        onPress={() => navigation.navigate('MedicationDetail', { medication: item })}
+      >
+        <View style={styles.iconContainer}>
+          <Icon name="pill" size={24} color={COLORS.primary} />
+        </View>
+        <View style={styles.textContainer}>
+          <Text style={styles.medicationName}>{item.name}</Text>
+
+          {item.startDate && item.endDate ? (
+            <Text style={styles.medicationPeriod}>
+              복용기간: {item.startDate} ~ {item.endDate}
+            </Text>
+          ) : (
+            <Text style={styles.medicationPeriod}>
+              유통기한: {item.expiry}
+            </Text>
+          )}
+
+          {nextAlarm && (
+            <Text style={styles.medicationTimes}>다음 알람: {nextAlarm}</Text>
+          )}
+
+          {intervalText && (
+            <Text style={styles.medicationTimes}>{intervalText}</Text>
+          )}
+        </View>
+        <Icon name="chevron-right" size={24} color={COLORS.gray} />
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>

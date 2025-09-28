@@ -1,3 +1,4 @@
+// DisposalScreen.tsx
 import React, { useMemo } from "react";
 import {
   View,
@@ -7,7 +8,6 @@ import {
   StatusBar,
   FlatList,
   TouchableOpacity,
-  Alert,
 } from "react-native";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { COLORS, SIZES, FONTS } from "./styles/theme";
@@ -35,7 +35,7 @@ function badgeColor(d: number) {
 }
 
 export default function DisposalScreen({ navigation }: any) {
-  const { state, removeDisposal } = useAppStore();
+  const { state } = useAppStore();
 
   const sorted = useMemo(
     () =>
@@ -44,13 +44,6 @@ export default function DisposalScreen({ navigation }: any) {
       ),
     [state.disposals]
   );
-
-  const remove = (id: string) => {
-    Alert.alert("삭제", "이 항목을 삭제할까요?", [
-      { text: "취소", style: "cancel" },
-      { text: "삭제", style: "destructive", onPress: () => removeDisposal(id) },
-    ]);
-  };
 
   const renderItem = ({ item }: { item: DisposalItem }) => {
     const d = diffDays(item.expiry);
@@ -65,29 +58,18 @@ export default function DisposalScreen({ navigation }: any) {
           <Text style={styles.sub}>유통기한 {item.expiry}</Text>
         </View>
 
-        {/* 우측 아이콘 영역 */}
-        <View style={{ flexDirection: "row", alignItems: "center" }}>
-          {/* D-Day 뱃지 */}
-          <View style={[styles.badge, { borderColor: color }]}>
-            <Text style={[styles.badgeText, { color }]}>{label}</Text>
-          </View>
-
-          {/* ? 버튼 (폐기 안내 이동) */}
-          <TouchableOpacity
-            onPress={() => navigation.navigate("DisposalGuide", { id: item.id })}
-            style={{ marginLeft: 8 }}
-          >
-            <Icon name="help-circle-outline" size={22} color={COLORS.primary} />
-          </TouchableOpacity>
-
-          {/* 삭제 버튼 */}
-          <TouchableOpacity
-            onPress={() => remove(item.id)}
-            style={{ marginLeft: 8 }}
-          >
-            <Icon name="trash-can-outline" size={20} color={COLORS.gray} />
-          </TouchableOpacity>
+        {/* D-Day 뱃지 */}
+        <View style={[styles.badge, { borderColor: color }]}>
+          <Text style={[styles.badgeText, { color }]}>{label}</Text>
         </View>
+
+        {/* ? 버튼 (폐기 안내 이동) */}
+        <TouchableOpacity
+          onPress={() => navigation.navigate("DisposalGuide", { id: item.id })}
+          style={{ marginLeft: 8 }}
+        >
+          <Icon name="help-circle-outline" size={22} color={COLORS.primary} />
+        </TouchableOpacity>
       </View>
     );
   };
@@ -104,20 +86,9 @@ export default function DisposalScreen({ navigation }: any) {
         ListEmptyComponent={
           <View style={styles.empty}>
             <Text style={styles.emptyTitle}>등록된 항목이 없어요</Text>
-            <Text style={styles.emptySub}>
-              + 버튼을 눌러 폐기 알림을 추가하세요
-            </Text>
           </View>
         }
       />
-
-      {/* ➕ 버튼 */}
-      <TouchableOpacity
-        style={styles.fab}
-        onPress={() => navigation.navigate("DisposalAdd")}
-      >
-        <Icon name="plus" size={28} color={COLORS.white} />
-      </TouchableOpacity>
     </SafeAreaView>
   );
 }
@@ -152,17 +123,4 @@ const styles = StyleSheet.create({
   badgeText: { ...FONTS.p },
   empty: { flex: 1, alignItems: "center", marginTop: "30%" },
   emptyTitle: { ...FONTS.h2, color: COLORS.darkGray },
-  emptySub: { ...FONTS.p, color: COLORS.gray, marginTop: SIZES.base },
-  fab: {
-    position: "absolute",
-    right: SIZES.padding,
-    bottom: SIZES.padding * 2,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: COLORS.primary,
-    alignItems: "center",
-    justifyContent: "center",
-    elevation: 8,
-  },
 });
