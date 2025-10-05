@@ -1,3 +1,4 @@
+// ProfileEditScreen.tsx
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
@@ -8,21 +9,10 @@ import { Picker } from '@react-native-picker/picker';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS, SIZES, FONTS } from './styles/theme';
 import api from './utils/api';
-import { useAppStore } from './store/appStore'; // 전역 user 상태 불러오기
+import { useAppStore } from './store/appStore';
 
-type ProfileData = {
-  name: string;
-  email: string;
-  phonenumber: string;
-  birth: string;
-  gender: '남자' | '여자';
-  nationality: '내국인' | '외국인';
-  pregnant?: boolean;
-  feeding?: boolean;
-};
-
-export default function ProfileEditScreen({ route, navigation }: any) {
-  const { state } = useAppStore(); // 전역 상태 불러오기
+export default function ProfileEditScreen({ navigation }: any) {
+  const { state } = useAppStore();
   const userId = state.user?.id;
 
   const [name, setName] = useState('');
@@ -31,8 +21,8 @@ export default function ProfileEditScreen({ route, navigation }: any) {
   const [birth, setBirth] = useState('');
   const [gender, setGender] = useState<'남자' | '여자'>('남자');
   const [nationality, setNationality] = useState<'내국인' | '외국인'>('내국인');
-  const [pregnant, setPregnant] = useState<boolean>(false);
-  const [feeding, setFeeding] = useState<boolean>(false);
+  const [pregnant, setPregnant] = useState(false);
+  const [feeding, setFeeding] = useState(false);
 
   const [showPicker, setShowPicker] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -57,17 +47,12 @@ export default function ProfileEditScreen({ route, navigation }: any) {
         } else {
           Alert.alert('오류', '프로필을 불러오지 못했습니다.');
         }
-      } catch (err : any) {
+      } catch (err: any) {
         console.error('get profile error:', err);
-
         const status = err?.response?.status;
         const message = err?.response?.data?.message;
-
-        if (status == 500) {
-          Alert.alert('서버 오류', message);
-        } else {
-          Alert.alert('네트워크 오류', '서버에 연결할 수 없습니다.');
-        }
+        if (status === 500) Alert.alert('서버 오류', message);
+        else Alert.alert('네트워크 오류', '서버에 연결할 수 없습니다.');
       }
     })();
   }, [userId]);
@@ -83,46 +68,37 @@ export default function ProfileEditScreen({ route, navigation }: any) {
   const handleSave = async () => {
     try {
       const payload = {
-        user_name : name,
-        phone_number : phonenumber,
-        birthday : birth,
-        gender : gender,
-        pregnant_flag : !!pregnant,
-        feeding_flag : !!feeding
-      }
+        user_name: name,
+        phone_number: phonenumber,
+        birthday: birth,
+        gender: gender,
+        pregnant_flag: pregnant,
+        feeding_flag: feeding,
+      };
 
       const res = await api.put(`/api/users/updateUserProfile/${userId}`, payload);
-
       if (res.data.success) {
         Alert.alert('저장 완료', '프로필이 업데이트되었습니다.', [
           { text: '확인', onPress: () => navigation.goBack() },
         ]);
-      } 
-
-    } catch (err : any) {
+      }
+    } catch (err: any) {
       console.error('update profile error:', err);
-
       const status = err?.response?.status;
       const message = err?.response?.data?.message;
-
-      if (status == 400) {
-        Alert.alert('저장 실패', message);
-      } else if (status == 500) {
-        Alert.alert('서버 오류', message);
-      } else {
-        Alert.alert('네트워크 오류', '서버에 연결할 수 없습니다.');
-      }
+      if (status === 400) Alert.alert('저장 실패', message);
+      else if (status === 500) Alert.alert('서버 오류', message);
+      else Alert.alert('네트워크 오류', '서버에 연결할 수 없습니다.');
     }
   };
 
   const handleChangeAvatar = () => {
-    Alert.alert('사진 변경', '프로필 사진 변경 기능은 이후에 연결할게요.');
+    Alert.alert('사진 변경', '프로필 사진 변경 기능은 이후에 연결할 예정입니다.');
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" />
-
       {/* 헤더 */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBtn}>
@@ -151,7 +127,7 @@ export default function ProfileEditScreen({ route, navigation }: any) {
         <TextInput
           style={styles.input}
           placeholder="이름"
-          placeholderTextColor={COLORS.gray}
+          placeholderTextColor="#777"
           value={name}
           onChangeText={setName}
         />
@@ -166,7 +142,7 @@ export default function ProfileEditScreen({ route, navigation }: any) {
         <TextInput
           style={styles.input}
           placeholder="휴대폰 번호"
-          placeholderTextColor={COLORS.gray}
+          placeholderTextColor="#777"
           value={phonenumber}
           onChangeText={setPhonenumber}
           keyboardType="phone-pad"
@@ -174,7 +150,7 @@ export default function ProfileEditScreen({ route, navigation }: any) {
 
         {/* 생년월일 */}
         <TouchableOpacity style={styles.input} onPress={() => setShowPicker(true)}>
-          <Text style={[styles.inputText, { color: birth ? COLORS.darkGray : COLORS.gray }]}>
+          <Text style={[styles.inputText, { color: birth ? COLORS.black : COLORS.gray }]}>
             {birth || '생년월일 선택'}
           </Text>
           <Icon name="calendar-month-outline" size={20} color={COLORS.gray} />
@@ -195,20 +171,22 @@ export default function ProfileEditScreen({ route, navigation }: any) {
             <Picker
               selectedValue={gender}
               onValueChange={(v) => setGender(v)}
-              itemStyle={styles.pickerItem}   
+              dropdownIconColor={COLORS.black}
+              style={styles.picker}
             >
-              <Picker.Item label="남자" value="남자" />
-              <Picker.Item label="여자" value="여자" />
+              <Picker.Item label="남자" value="남자" color={COLORS.black} />
+              <Picker.Item label="여자" value="여자" color={COLORS.black} />
             </Picker>
           </View>
           <View style={styles.pickerContainer}>
             <Picker
               selectedValue={nationality}
               onValueChange={(v) => setNationality(v)}
-              itemStyle={styles.pickerItem}   
+              dropdownIconColor={COLORS.black}
+              style={styles.picker}
             >
-              <Picker.Item label="내국인" value="내국인" />
-              <Picker.Item label="외국인" value="외국인" />
+              <Picker.Item label="내국인" value="내국인" color={COLORS.black} />
+              <Picker.Item label="외국인" value="외국인" color={COLORS.black} />
             </Picker>
           </View>
         </View>
@@ -250,52 +228,75 @@ export default function ProfileEditScreen({ route, navigation }: any) {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: COLORS.white },
   header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: SIZES.padding / 2, paddingTop: SIZES.base, paddingBottom: SIZES.base,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: SIZES.padding / 2,
+    paddingTop: SIZES.base,
+    paddingBottom: SIZES.base,
   },
   headerBtn: { padding: SIZES.padding / 2, minWidth: 40, alignItems: 'center' },
-  headerTitle: { ...FONTS.h2, color: COLORS.darkGray },
+  headerTitle: { ...FONTS.h2, color: COLORS.black },
   container: { paddingHorizontal: SIZES.padding, paddingBottom: 60 },
 
   avatarRow: { alignItems: 'center', marginTop: SIZES.padding, marginBottom: SIZES.padding },
   avatarCircle: {
-    width: 92, height: 92, borderRadius: 46,
-    backgroundColor: COLORS.primary, alignItems: 'center', justifyContent: 'center',
+    width: 92,
+    height: 92,
+    borderRadius: 46,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   avatarBtn: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: COLORS.darkGray, paddingHorizontal: 12, paddingVertical: 8,
-    borderRadius: 20, marginTop: SIZES.base * 1.5,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.darkGray,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginTop: SIZES.base * 1.5,
   },
   avatarBtnText: { marginLeft: 6, ...FONTS.p, color: COLORS.white },
 
-  sectionTitle: { ...FONTS.h3, color: COLORS.darkGray, marginBottom: SIZES.base },
+  sectionTitle: { ...FONTS.h3, color: COLORS.black, marginBottom: SIZES.base },
   input: {
-    backgroundColor: COLORS.lightGray, borderRadius: SIZES.radius,
-    padding: SIZES.padding * 0.75, marginBottom: SIZES.base * 2,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: COLORS.lightGray,
+    borderRadius: SIZES.radius,
+    padding: SIZES.padding * 0.75,
+    marginBottom: SIZES.base * 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  inputText: { ...FONTS.p, color: COLORS.darkGray },
+  inputText: { ...FONTS.p, color: COLORS.black },
   readonlyRow: { opacity: 0.8 },
 
   pickerRow: { flexDirection: 'row', marginBottom: SIZES.base * 2 },
   pickerContainer: { flex: 1, backgroundColor: COLORS.lightGray, borderRadius: SIZES.radius },
-  pickerItem: { height: 120, color: COLORS.darkGray },
+  picker: { color: COLORS.black },
 
   optionSection: { marginBottom: SIZES.padding },
   switchRow: {
-    backgroundColor: COLORS.lightGray, borderRadius: SIZES.radius,
-    paddingHorizontal: SIZES.padding, paddingVertical: SIZES.padding / 2,
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    backgroundColor: COLORS.lightGray,
+    borderRadius: SIZES.radius,
+    paddingHorizontal: SIZES.padding,
+    paddingVertical: SIZES.padding / 2,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: SIZES.base,
   },
-  switchLabel: { ...FONTS.p, color: COLORS.darkGray },
+  switchLabel: { ...FONTS.p, color: COLORS.black },
 
   saveBtn: {
-    backgroundColor: COLORS.primary, padding: SIZES.padding * 0.9, borderRadius: SIZES.radius,
-    alignItems: 'center', marginTop: SIZES.base, marginBottom: SIZES.padding,
-    shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.3, shadowRadius: 5, elevation: 8,
+    backgroundColor: COLORS.primary,
+    padding: SIZES.padding * 0.9,
+    borderRadius: SIZES.radius,
+    alignItems: 'center',
+    marginTop: SIZES.base,
+    marginBottom: SIZES.padding,
+    elevation: 4,
   },
   saveBtnText: { ...FONTS.h3, color: COLORS.white },
 });

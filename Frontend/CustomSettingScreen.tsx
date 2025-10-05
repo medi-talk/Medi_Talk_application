@@ -1,3 +1,4 @@
+// CustomSettingScreen.tsx
 import React, { useState } from 'react';
 import {
   View,
@@ -11,8 +12,8 @@ import {
   Alert,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-
 import { COLORS, SIZES, FONTS } from './styles/theme';
+import { navigationRef } from './App'; 
 
 const SettingsRow = ({
   icon,
@@ -72,8 +73,15 @@ export default function CustomSettingScreen({ navigation }: any) {
         <Text style={styles.headerTitle}>설정</Text>
 
         <Text style={styles.sectionTitle}>계정 관리</Text>
-        <SettingsRow icon="account-edit-outline" title="프로필 수정" onPress={() => navigation.navigate('ProfileEdit')} />
-        <SettingsRow icon="lock-outline" title="비밀번호 변경" onPress={() => navigation.navigate('PasswordChange')} />
+        <SettingsRow
+          icon="account-edit-outline"
+          title="프로필 수정"
+          onPress={() => navigationRef.navigate('ProfileEdit')}/>
+        <SettingsRow
+          icon="lock-outline"
+          title="비밀번호 변경"
+          onPress={() => navigationRef.navigate('PasswordChange')}
+        />
 
         <Text style={styles.sectionTitle}>알림 설정</Text>
         <SettingsRow
@@ -92,8 +100,11 @@ export default function CustomSettingScreen({ navigation }: any) {
         />
 
         <Text style={styles.sectionTitle}>가족 관리</Text>
-        {/* Family → FamilyList로 변경 */}
-        <SettingsRow icon="heart-outline" title="가족 목록 보기" onPress={() => navigation.navigate('FamilyList')} />
+        <SettingsRow
+          icon="heart-outline"
+          title="가족 목록 보기"
+          onPress={() => navigationRef.navigate('FamilyList')}
+        />
 
         <Text style={styles.sectionTitle}>기타</Text>
         <TouchableOpacity style={styles.actionRow} onPress={handleLogout}>
@@ -110,8 +121,19 @@ export default function CustomSettingScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: COLORS.white },
   container: { flex: 1 },
-  headerTitle: { ...FONTS.h1, paddingHorizontal: SIZES.padding, paddingTop: SIZES.padding, paddingBottom: SIZES.base },
-  sectionTitle: { ...FONTS.p, color: COLORS.gray, paddingHorizontal: SIZES.padding, marginTop: SIZES.padding, marginBottom: SIZES.base },
+  headerTitle: {
+    ...FONTS.h1,
+    paddingHorizontal: SIZES.padding,
+    paddingTop: SIZES.padding,
+    paddingBottom: SIZES.base,
+  },
+  sectionTitle: {
+    ...FONTS.p,
+    color: COLORS.gray,
+    paddingHorizontal: SIZES.padding,
+    marginTop: SIZES.padding,
+    marginBottom: SIZES.base,
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

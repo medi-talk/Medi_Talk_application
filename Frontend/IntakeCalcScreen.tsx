@@ -1,78 +1,278 @@
 // IntakeCalcScreen.tsx
-import React, { useMemo, useState } from 'react';
-import { View, Text, TextInput, StyleSheet } from 'react-native';
-import { COLORS, SIZES, FONTS } from './styles/theme';
+import React, { useState, useCallback } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  FlatList,
+  SafeAreaView,
+  StatusBar,
+  ScrollView,
+  Modal,
+  BackHandler,
+} from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
+import Icon from "react-native-vector-icons/MaterialCommunityIcons";
+import { COLORS, FONTS, SIZES } from "./styles/theme";
+import * as Progress from "react-native-progress";
 
-function toNum(s: string) { const n = parseFloat(s); return Number.isFinite(n) ? n : NaN; }
-function clamp(n: number, min: number, max: number) { return Math.max(min, Math.min(max, n)); }
+const dummyNutrients = [
+  {
+    id: "1",
+    name: "비타민 A",
+    unit: "μg RAE",
+    status: 1,
+    myAmount: 900.0,
+    ear: 570.0,
+    rni: 800.0,
+    ai: 0.0,
+    ul: 3000.0,
+    risk: null,
+  },
+  {
+    id: "2",
+    name: "비타민 D",
+    unit: "μg",
+    status: 3,
+    myAmount: 5.0,
+    ear: 10.0,
+    rni: 15.0,
+    ai: 0.0,
+    ul: 100.0,
+    risk: "골다공증 위험 증가",
+  },
+  {
+    id: "3",
+    name: "비타민 K",
+    unit: "μg",
+    status: 5,
+    myAmount: 600.0,
+    ear: 150.0,
+    rni: 250.0,
+    ai: 0.0,
+    ul: 500.0,
+    risk: "혈액 응고 이상 가능",
+  },
+];
 
-export default function IntakeCalcScreen() {
-  const [weight, setWeight] = useState('60');       // kg
-  const [doseMgPerKg, setDoseMgPerKg] = useState('10'); // mg/kg (사용자가 입력)
-  const [tabletMg, setTabletMg] = useState('500');  // 한 알 mg
-  const [intervalHr, setIntervalHr] = useState('8'); // 시간 간격
+const statusLabels: any = {
+  0: { text: "섭취 안함", color: COLORS.gray },
+  1: { text: "적정 섭취 중", color: "green" },
+  2: { text: "적정 섭취 중", color: "green" },
+  3: { text: "충분하지 않을 수 있음", color: "#FF9F43" },
+  4: { text: "충분 여부 불확실", color: "#FF9F43" },
+  5: { text: "과다 섭취 위험", color: COLORS.danger },
+  6: { text: "결핍 위험", color: COLORS.danger },
+};
 
-  const calc = useMemo(() => {
-    const w = toNum(weight), dpk = toNum(doseMgPerKg), tab = toNum(tabletMg), iv = toNum(intervalHr);
-    if ([w, dpk, tab, iv].some(v => !Number.isFinite(v) || v <= 0)) return null;
+export default function IntakeCalcScreen({ navigation }: any) {
+  const [selected, setSelected] = useState<any | null>(null);
+  const [nutrients] = useState(dummyNutrients);
 
-    const singleMg = w * dpk;                 // 1회 mg
-    const pills = singleMg / tab;             // 알 수
-    const dosesPerDay = Math.floor(24 / iv);  // 하루 투여 횟수(간격 기반)
-    const dailyMg = singleMg * dosesPerDay;   // 1일 총 mg (간격 기준)
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        navigation.navigate("Main");
+        return true;
+      };
+      const subscription = BackHandler.addEventListener(
+        "hardwareBackPress",
+        onBackPress
+      );
+      return () => subscription.remove();
+    }, [navigation])
+  );
 
-    
-    return {
-      singleMg: Math.round(singleMg),
-      pills: Math.round(pills * 100) / 100,
-      dosesPerDay,
-      dailyMg: Math.round(dailyMg),
-    };
-  }, [weight, doseMgPerKg, tabletMg, intervalHr]);
+  const renderItem = ({ item }: any) => (
+    <TouchableOpacity style={styles.row} onPress={() => setSelected(item)}>
+      <Text style={styles.nutrient}>{item.name}</Text>
+      <Text style={[styles.status, { color: statusLabels[item.status].color }]}>
+        {statusLabels[item.status].text}
+      </Text>
+    </TouchableOpacity>
+  );
+
+  const calcProgress = (nutrient: any) => {
+    if (!nutrient) return 0;
+    if (nutrient.rni > 0) return Math.min(nutrient.myAmount / nutrient.rni, 1);
+    if (nutrient.ul > 0) return Math.min(nutrient.myAmount / nutrient.ul, 1);
+    return 0;
+  };
 
   return (
-    <View style={styles.safe}>
-      <Text style={styles.title}>섭취량 계산기 (일반 mg/kg)</Text>
+    <SafeAreaView style={styles.safe}>
+      <StatusBar barStyle="dark-content" />
+      <ScrollView contentContainerStyle={styles.container}>
+        <TouchableOpacity
+          style={styles.profileBox}
+          onPress={() => navigation.navigate("ProfileEdit")}
+        >
+          <View style={{ flex: 1 }}>
+            <Text style={styles.info}>나이: 만 25세</Text>
+            <Text style={styles.info}>성별: 남자</Text>
+            <Text style={styles.info}>임신 여부: X</Text>
+            <Text style={styles.info}>수유 여부: X</Text>
+          </View>
+          <Text style={styles.arrow}>{">"}</Text>
+        </TouchableOpacity>
 
-      <Text style={styles.label}>체중(kg)</Text>
-      <TextInput style={styles.input} keyboardType="numeric" value={weight} onChangeText={setWeight} />
+        <Text style={styles.sectionTitle}>영양소별 섭취 상태</Text>
+        <FlatList
+          data={nutrients}
+          keyExtractor={(item) => item.id}
+          renderItem={renderItem}
+          scrollEnabled={false}
+        />
 
-      <Text style={styles.label}>1회 용량 (mg/kg)</Text>
-      <TextInput style={styles.input} keyboardType="numeric" value={doseMgPerKg} onChangeText={setDoseMgPerKg} />
+        <View style={styles.warningBox}>
+          <Text style={styles.warningTitle}>※ 주의사항 ※</Text>
+          <Text style={styles.warningText}>
+            음식 영양소까지 합치면 실제 섭취량은 더 높아질 수 있습니다.
+          </Text>
+          <Text style={styles.warningText}>
+            개인 건강 상태에 따라 필요량은 달라질 수 있습니다.
+          </Text>
+          <Text style={styles.warningText}>
+            상한 섭취량 근접 시 장기간 섭취에 주의가 필요합니다.
+          </Text>
+          <Text style={styles.warningText}>
+            상한 섭취량이 없어도 과잉 섭취는 안전하다고 단정할 수 없습니다.
+          </Text>
+          <Text style={styles.warningText}>
+            결과는 참고용이며, 정확한 상담은 의사·영양사와 하세요.
+          </Text>
+        </View>
+      </ScrollView>
 
-      <Text style={styles.label}>약 한 알 함량 (mg)</Text>
-      <TextInput style={styles.input} keyboardType="numeric" value={tabletMg} onChangeText={setTabletMg} />
+      <Modal visible={!!selected} transparent animationType="fade">
+        <View style={styles.dialogOverlay}>
+          <View style={styles.dialogBox}>
+            <Text style={styles.modalTitle}>
+              {selected?.name} ({selected?.unit})
+            </Text>
+            <Text
+              style={{
+                color: statusLabels[selected?.status || 0].color,
+                ...FONTS.h3,
+                marginBottom: 10,
+              }}
+            >
+              {statusLabels[selected?.status || 0].text}
+            </Text>
 
-      <Text style={styles.label}>복용 간격 (시간)</Text>
-      <TextInput style={styles.input} keyboardType="numeric" value={intervalHr} onChangeText={setIntervalHr} />
+            <View style={styles.detailRow}>
+              <Text>나의 섭취량</Text>
+              <Text>
+                {selected?.myAmount?.toFixed(1)} {selected?.unit}
+              </Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Text>권장 섭취량 (RNI)</Text>
+              <Text>
+                {selected?.rni > 0 ? selected.rni.toFixed(1) : "-"}{" "}
+                {selected?.unit}
+              </Text>
+            </View>
 
-      <View style={styles.card}>
-        {calc ? (
-          <>
-            <Text style={styles.row}>1회 용량: <Text style={styles.bold}>{calc.singleMg} mg</Text></Text>
-            <Text style={styles.row}>대략 알 수: <Text style={styles.bold}>{calc.pills} 알</Text> (한 알 {tabletMg} mg 기준)</Text>
-            <Text style={styles.row}>하루 횟수: <Text style={styles.bold}>{calc.dosesPerDay} 회</Text> (간격 {intervalHr}시간)</Text>
-            <Text style={styles.row}>하루 총량(간격 기준): <Text style={styles.bold}>{calc.dailyMg} mg</Text></Text>
-          </>
-        ) : (
-          <Text style={{ ...FONTS.p, color: COLORS.gray }}>모든 값을 올바르게 입력하세요.</Text>
-        )}
-      </View>
+            <Progress.Bar
+              progress={calcProgress(selected)}
+              color={statusLabels[selected?.status || 0].color}
+              borderWidth={0}
+              unfilledColor={COLORS.lightGray}
+              width={null}
+              height={8}
+              borderRadius={4}
+              style={{ marginTop: 16 }}
+            />
 
-      <Text style={styles.notice}>
-        ※제 용량은 질환/연령/제형/동반질환/병용약물 등에 따라 달라질 수 있으니 반드시 약사/의사 상담 및 공식 허가정보를 확인하세요.
-      </Text>
-    </View>
+            <TouchableOpacity
+              style={styles.closeBtn}
+              onPress={() => setSelected(null)}
+            >
+              <Text style={{ color: COLORS.white }}>닫기</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={() => navigation.navigate("IntakeListScreen")}
+      >
+        <Icon name="format-list-bulleted" size={30} color={COLORS.white} />
+      </TouchableOpacity>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: COLORS.lightGray, padding: SIZES.padding },
-  title: { ...FONTS.h2, color: COLORS.darkGray, marginBottom: 8 },
-  label: { ...FONTS.h3, color: COLORS.darkGray, marginTop: SIZES.base * 2, marginBottom: SIZES.base },
-  input: { backgroundColor: COLORS.white, borderRadius: SIZES.radius, paddingHorizontal: 12, paddingVertical: 12, ...FONTS.p, color: COLORS.darkGray },
-  card: { backgroundColor: COLORS.white, borderRadius: SIZES.radius, padding: SIZES.padding, marginTop: SIZES.base * 2 },
-  row: { ...FONTS.p, color: COLORS.darkGray, marginBottom: 6 },
-  bold: { fontWeight: 'bold', color: COLORS.darkGray },
-  notice: { ...FONTS.p, color: COLORS.gray, textAlign: 'center', marginTop: 10 },
+  safe: { flex: 1, backgroundColor: COLORS.white },
+  container: { padding: SIZES.padding },
+  profileBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: COLORS.lightGray,
+    borderRadius: SIZES.radius,
+    padding: SIZES.padding,
+    marginBottom: 16,
+  },
+  info: { ...FONTS.p, color: COLORS.darkGray, marginBottom: 4 },
+  arrow: { fontSize: 22, color: COLORS.darkGray, marginLeft: 8 },
+  sectionTitle: { ...FONTS.h2, marginVertical: 12 },
+  row: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    padding: 12,
+    borderBottomWidth: 1,
+    borderColor: COLORS.gray,
+  },
+  nutrient: { ...FONTS.h3, color: COLORS.darkGray },
+  status: { ...FONTS.h4 },
+  warningBox: {
+    marginTop: 24,
+    padding: 12,
+    backgroundColor: COLORS.lightGray,
+    borderRadius: 8,
+  },
+  warningTitle: { ...FONTS.h3, color: COLORS.danger, marginBottom: 6 },
+  warningText: { ...FONTS.p, color: COLORS.darkGray, marginBottom: 2 },
+  detailRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  modalTitle: { ...FONTS.h2, marginBottom: 12 },
+  closeBtn: {
+    marginTop: 20,
+    backgroundColor: COLORS.primary,
+    padding: 10,
+    borderRadius: SIZES.radius,
+    alignItems: "center",
+  },
+  dialogOverlay: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.4)",
+  },
+  dialogBox: {
+    width: "90%",
+    backgroundColor: COLORS.white,
+    borderRadius: 12,
+    padding: 20,
+  },
+  fab: {
+    position: "absolute",
+    bottom: 24,
+    right: 24,
+    backgroundColor: COLORS.primary,
+    borderRadius: 50,
+    width: 60,
+    height: 60,
+    alignItems: "center",
+    justifyContent: "center",
+    elevation: 5,
+  },
 });

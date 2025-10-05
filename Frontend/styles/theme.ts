@@ -5,6 +5,7 @@ export const COLORS = {
   gray: '#A9A9A9',
   darkGray: '#555555',
   danger: '#FF6B6B',
+   black: '#000000',
 };
 
 /**앱 크기 전체 크기 정의 

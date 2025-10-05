@@ -12,11 +12,14 @@ import {
 import { COLORS, SIZES, FONTS } from './styles/theme';
 import { useAppStore } from './store/appStore';
 
-// HH:mm → 오전/오후 hh:mm 변환
+// HH:mm 또는 "오전 08:00" 같은 문자열 변환
 function displayKoreanTime(hhmm: string) {
+  if (!hhmm.includes(":")) return hhmm;
   const [hStr, mStr] = hhmm.split(":");
-  let h = parseInt(hStr, 10);
+  const h = parseInt(hStr, 10);
   const m = parseInt(mStr, 10);
+  if (isNaN(h) || isNaN(m)) return hhmm;
+
   const am = h < 12;
   const period = am ? "오전" : "오후";
   let dispH = h % 12;
@@ -30,7 +33,7 @@ export default function MedicationDetailScreen({ route, navigation }: any) {
   const { state, removeLinked } = useAppStore();
 
   const medication =
-    (passedId ? state.medications.find(m => m.id === passedId) : null) ?? passed ?? null;
+    (passedId ? state.medications.find((m) => m.id === passedId) : null) ?? passed ?? null;
 
   if (!medication) {
     return (
@@ -57,22 +60,6 @@ export default function MedicationDetailScreen({ route, navigation }: any) {
     ]);
   };
 
-  // 등록한 시각 + intervalMinutes로 다음 복용 알람 계산
-  const nextAlarm = medication.intervalMinutes && medication.times?.length
-    ? (() => {
-        const base = medication.times[0]; // 첫 등록 시각
-        const [hStr, mStr] = base.split(":");
-        const baseDate = new Date();
-        baseDate.setHours(parseInt(hStr, 10), parseInt(mStr, 10), 0, 0);
-
-        const nextDate = new Date(baseDate.getTime() + medication.intervalMinutes * 60000);
-        const hh = String(nextDate.getHours()).padStart(2, "0");
-        const mm = String(nextDate.getMinutes()).padStart(2, "0");
-
-        return displayKoreanTime(`${hh}:${mm}`);
-      })()
-    : null;
-
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar barStyle="dark-content" />
@@ -96,27 +83,28 @@ export default function MedicationDetailScreen({ route, navigation }: any) {
           </>
         )}
 
-        {medication.intervalMinutes ? (
+        {/* 복용 알람 */}
+        {medication.intervalMinutes > 0 ? (
           <>
             <Text style={styles.label}>복용 간격</Text>
             <Text style={styles.value}>{medication.intervalMinutes}분</Text>
           </>
+        ) : medication.times && medication.times.length > 0 ? (
+          <>
+            <Text style={styles.label}>복용 알람</Text>
+            {medication.times.map((t: string, idx: number) => (
+              <Text key={idx} style={styles.value}>
+                {displayKoreanTime(t)}
+              </Text>
+            ))}
+          </>
         ) : null}
-
-        <Text style={styles.label}>다음 복용 알람</Text>
-        <Text style={styles.value}>{nextAlarm ?? '없음'}</Text>
 
         <Text style={styles.label}>알림</Text>
         <Text style={styles.value}>{medication.alarmFlag ? 'ON' : 'OFF'}</Text>
 
         <Text style={styles.label}>가족 공개</Text>
         <Text style={styles.value}>{medication.familyShare ? '예' : '아니오'}</Text>
-
-        {/* 새로 추가된 속성들 표시 */}
-        <Text style={styles.label}>카운트 모드</Text>
-        <Text style={styles.value}>
-          {medication.countMode === 'auto' ? '자동 카운트' : '수동 카운트'}
-        </Text>
 
         <Text style={styles.label}>야간 알림</Text>
         <Text style={styles.value}>

@@ -49,9 +49,9 @@ export default function FamilyEditScreen({ route, navigation }: any) {
     };
 
     if (isEditing) {
-      navigation.navigate('FamilyList', { edited: payload }); // ✅ 수정
+      navigation.navigate('FamilyList', { edited: payload }); 
     } else {
-      navigation.navigate('FamilyList', { added: payload }); // ✅ 수정
+      navigation.navigate('FamilyList', { added: payload }); 
     }
   };
 

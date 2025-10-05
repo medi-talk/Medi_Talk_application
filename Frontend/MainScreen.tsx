@@ -32,7 +32,7 @@ const groupedFeatures = [
     ]},
     { title: '기타 정보', data: [
         { name: '근처 약국 찾기', icon: 'map-marker-outline', screen: 'PharmacyList' },
-        { name: '질문 게시판', icon: 'comment-question-outline', screen: 'QuestionListScreen'},
+        { name: '질문 게시판', icon: 'comment-question-outline', screen: 'BoardListScreen'},
     ]},
 ];
 
