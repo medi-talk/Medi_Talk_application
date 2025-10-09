@@ -23,3 +23,6 @@ problems-report.html
 
 # 환경변수 파일
 .env
+
+# API 관리 파일
+Frontend/config/apiConfig.ts
