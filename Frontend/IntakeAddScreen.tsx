@@ -10,13 +10,17 @@ import {
   StyleSheet,
   StatusBar,
   Alert,
+  PermissionsAndroid,
+  Platform
 } from "react-native";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { COLORS, FONTS, SIZES } from "./styles/theme";
-import { useAppStore } from "./store/appStore"; 
+import { useAppStore } from "./store/appStore";
+import { launchCamera } from "react-native-image-picker";
+import { analyzeNutritionForIntake, applyOcrToNutrients, type IntakeItemsResult } from "./opencv";
 
 export default function IntakeAddScreen({ navigation }: any) {
-  const { addIntake } = useAppStore(); 
+  const { addIntake } = useAppStore();
 
   const [groupName, setGroupName] = useState("");
   const [nutrients, setNutrients] = useState({
@@ -33,6 +37,92 @@ export default function IntakeAddScreen({ navigation }: any) {
     pantothenic: "",
     biotin: "",
   });
+
+  /* OpenCV 관련 함수 Start*/
+  // 권한 함수
+  async function ensureCameraAndImagePerms(): Promise<boolean> {
+    if (Platform.OS !== "android") return true;
+
+    // Android 13+는 READ_MEDIA_IMAGES, 그 이하는 READ_EXTERNAL_STORAGE
+    const perms = [
+      PermissionsAndroid.PERMISSIONS.CAMERA,
+      Platform.Version >= 33
+        ? PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES
+        : PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
+    ];
+
+    const results = await PermissionsAndroid.requestMultiple(perms);
+    return Object.values(results).every(
+      (v) => v === PermissionsAndroid.RESULTS.GRANTED
+    );
+  }
+
+  // 카메라 촬영 → 서버 업로드 → 결과 반영
+  const handleCameraScan = async () => {
+    // 권한 체크
+    const ok = await ensureCameraAndImagePerms();
+    if (!ok) {
+      Alert.alert("권한 필요", "카메라/사진 접근 권한을 허용해 주세요.");
+      return;
+    }
+
+    try {
+      // 카메라 실행
+      const resp = await new Promise<any>((resolve) =>
+        launchCamera(
+          {
+            mediaType: "photo",
+            includeBase64: false,
+            cameraType: "back",
+            quality: 1.0,
+            maxWidth: 2560,
+            maxHeight: 2560,
+            saveToPhotos: false, // 저장 안 함
+          },
+          (r: any) => resolve(r)
+        )
+      );
+
+      // 사용자 취소/에러 처리
+      if (resp?.didCancel) return;
+      if (resp?.errorCode) {
+        Alert.alert("촬영 실패", resp.errorMessage || resp.errorCode);
+        return;
+      }
+
+      // 업로드용 파일 구성
+      const asset = resp?.assets?.[0];
+      if (!asset?.uri) {
+        Alert.alert("오류", "이미지 위치를 가져올 수 없습니다.");
+        return;
+      }
+
+      const file = {
+        uri: asset.uri,
+        type: asset.type || "image/jpeg",
+        name: asset.fileName || "photo.jpg",
+      };
+
+      // 서버 업로드 & JSON 수신
+      const adapted = await analyzeNutritionForIntake(file, { timeoutMs: 30000 });
+
+      // 결과 확인
+      console.log("🧩 OCR 전체 결과:", JSON.stringify(adapted, null, 2));
+
+      // 화면 반영
+      if (!adapted.items?.length) {
+        Alert.alert("알림", "표를 인식하지 못했습니다. 더 선명하게 촬영해 보세요.");
+        return;
+      }
+
+      setNutrients((prev) => applyOcrToNutrients(adapted, prev));
+
+      Alert.alert("완료", "영양성분을 채웠습니다.");
+    } catch (e: any) {
+      Alert.alert("OCR 실패", e?.message || "네트워크 오류");
+    }
+  };
+  /* OpenCV 관련 함수 End*/
 
   const handleChange = (key: string, value: string) => {
     setNutrients((prev) => ({ ...prev, [key]: value }));
@@ -101,7 +191,7 @@ export default function IntakeAddScreen({ navigation }: any) {
 
         {/* 하단 버튼 영역 */}
         <View style={styles.buttonRow}>
-          <TouchableOpacity style={styles.cameraBtn}>
+          <TouchableOpacity style={styles.cameraBtn} onPress={handleCameraScan}>
             <Icon name="camera" size={28} color={COLORS.black} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>

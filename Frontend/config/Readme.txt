@@ -1,0 +1,1 @@
+Make apiConfig.ts file in this directory.
