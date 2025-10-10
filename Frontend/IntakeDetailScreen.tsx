@@ -13,27 +13,51 @@ import {
 import { useFocusEffect } from "@react-navigation/native";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { COLORS, FONTS, SIZES } from "./styles/theme";
-import { useAppStore } from "./store/appStore";
+import api from "./utils/api";
+
+type IntakeDetail = {
+  nutrientId: number;
+  nutrientName: string;
+  unit: string;
+  intake: string;
+};
 
 export default function IntakeDetailScreen({ route, navigation }: any) {
-  const { id } = route.params;
-  const { state, removeIntake } = useAppStore();
-  const [data, setData] = useState<any>(null);
+  const { id, name } = route.params;
+
+  const [intakes, setIntakes] = useState<IntakeDetail[] | null>(null);
+  const [groupTitle, setGroupTitle] = useState<string>(name || "상세 정보");
+
+  const fetchIntakes = useCallback(async () => {
+    try {
+      const res = await api.get(`/api/intakeCalc/listUserNutrientGroupIntakes/${id}`);
+
+      if (res.data.success && Array.isArray(res.data.intakes)) {
+        setIntakes(res.data.intakes);
+        if (res.data.groupTitle) setGroupTitle(res.data.groupTitle);
+      } else {
+        setIntakes([]);
+      }
+
+    } catch (err : any) {
+      console.error('list intakes error:', err);
+
+      const status = err?.response?.status;
+      const message = err?.response?.data?.message;
+
+      if (status == 500) {
+        Alert.alert('서버 오류', message);
+      } else {
+        Alert.alert('네트워크 오류', '서버에 연결할 수 없습니다.');
+      }
+    }
+  }, [id]);
 
   useFocusEffect(
     useCallback(() => {
-      const found = state.intakes.find((i) => i.id === id);
-      if (found) {
-        try {
-          const parsedDose = JSON.parse(found.dose);
-          setData({ ...found, nutrients: parsedDose });
-        } catch {
-          setData({ ...found, nutrients: {} });
-        }
-      } else {
-        navigation.navigate("IntakeListScreen");
-      }
-    }, [id, state.intakes, navigation])
+      fetchIntakes();
+      return () => {};
+    }, [fetchIntakes])
   );
 
   const handleDelete = () => {
@@ -42,16 +66,35 @@ export default function IntakeDetailScreen({ route, navigation }: any) {
       {
         text: "삭제",
         style: "destructive",
-        onPress: () => {
-          removeIntake(id);
-          Alert.alert("삭제 완료", "영양소가 삭제되었습니다.");
-          navigation.goBack(); 
+        onPress: async () => {
+          try {
+            const res = await api.delete(`/api/intakeCalc/deleteUserNutrientGroup/${id}`);
+
+            if (res.data.success) {
+              Alert.alert("삭제 완료", "영양소가 삭제되었습니다.");
+              navigation.goBack();
+            } else {
+              Alert.alert("삭제 실패", res.data.message);
+            }
+
+          } catch (err : any) {
+            console.error('delete intake error:', err);
+
+            const status = err?.response?.status;
+            const message = err?.response?.data?.message;
+
+            if (status == 500) {
+              Alert.alert('서버 오류', message);
+            } else {
+              Alert.alert('네트워크 오류', '서버에 연결할 수 없습니다.');
+            }
+          }
         },
       },
     ]);
   };
 
-  if (!data) {
+  if (intakes === null) {
     return (
       <SafeAreaView style={styles.safe}>
         <StatusBar barStyle="dark-content" />
@@ -73,25 +116,35 @@ export default function IntakeDetailScreen({ route, navigation }: any) {
         <Text style={styles.header}>IntakeDetailScreen</Text>
 
         <View style={styles.groupBox}>
-          <Text style={styles.groupTitle}>{data.name}</Text>
+          <Text style={styles.groupTitle}>{groupTitle}</Text>
         </View>
 
         <View style={styles.section}>
-          {Object.entries(data.nutrients || {}).map(([key, value]) => {
-            if (!value || value === "0") return null;
-            return (
-              <View key={key} style={styles.itemBlock}>
-                <Text style={styles.itemLabel}>{formatLabel(key)}</Text>
-                <Text style={styles.itemValue}>{String(value)}</Text>
+          { intakes
+            .filter((nutrient) => Number(nutrient.intake) > 0)
+            .map((nutrient) => (
+              <View key={nutrient.nutrientId} style={styles.itemBlock}>
+                <Text style={styles.itemLabel}>{nutrient.nutrientName}</Text>
+                <Text style={styles.itemValue}>{`${nutrient.intake} ${nutrient.unit}`}</Text>
               </View>
-            );
-          })}
+            ))
+          }
+          {intakes.length === 0 || intakes.every((nutrient) => Number(nutrient.intake) <= 0) ? (
+            <Text style={{ ...FONTS.p, color: COLORS.darkGray }}>표시할 섭취량이 없습니다.</Text>
+          ) : null}
         </View>
 
         <View style={styles.buttonRow}>
           <TouchableOpacity
             style={styles.editBtn}
-            onPress={() => navigation.navigate("IntakeEditScreen", { id })}
+            onPress={() => navigation.navigate("IntakeEditScreen", { 
+              userNutrientId: id,
+              groupTitle: groupTitle,
+              intakes: intakes.map((n: any) => ({
+                nutrientId: n.nutrientId,
+                intake: n.intake,
+              }))
+             })}
           >
             <Text style={styles.btnText}>수정하기</Text>
           </TouchableOpacity>
@@ -102,24 +155,6 @@ export default function IntakeDetailScreen({ route, navigation }: any) {
       </ScrollView>
     </SafeAreaView>
   );
-}
-
-function formatLabel(key: string) {
-  const map: Record<string, string> = {
-    vitaminA: "비타민 A (μg RAE)",
-    vitaminD: "비타민 D (μg)",
-    vitaminE: "비타민 E (mg α-TE)",
-    vitaminK: "비타민 K (μg)",
-    vitaminC: "비타민 C (mg)",
-    thiamin: "티아민 (mg)",
-    riboflavin: "리보플라빈 (mg)",
-    vitaminB6: "비타민 B6 (mg)",
-    folate: "엽산 (μg DFE)",
-    vitaminB12: "비타민 B12 (μg)",
-    pantothenic: "판토텐산 (mg)",
-    biotin: "비오틴 (μg)",
-  };
-  return map[key] || key;
 }
 
 const styles = StyleSheet.create({

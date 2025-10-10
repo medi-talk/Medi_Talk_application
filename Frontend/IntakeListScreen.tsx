@@ -1,5 +1,5 @@
 // IntakeListScreen.tsx
-import React, { useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -9,21 +9,52 @@ import {
   SafeAreaView,
   StatusBar,
   BackHandler,
+  Alert
 } from "react-native";
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect, useIsFocused } from "@react-navigation/native";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { COLORS, FONTS, SIZES } from "./styles/theme";
+import api from "./utils/api";
 import { useAppStore } from "./store/appStore";
-// import axios from "axios"; // DB 연동 시 주석 해제
+
+type GroupItem = {
+  id: string;
+  name: string;
+};
 
 export default function IntakeListScreen({ navigation }: any) {
   const { state } = useAppStore();
-  const supplements = state.intakes;
+  const userId = state.user?.id;
+  const isFocused = useIsFocused();
 
-  // DB 연동 시: 초기 렌더링 시 서버에서 영양소 리스트 불러오기
+  const [groups, setGroups] = useState<GroupItem[]>([]);
+
   useEffect(() => {
-    // axios.get("https://your-server.com/api/supplements")
-  }, []);
+    if (!isFocused) return;
+    (async () => {
+      try {
+        const res = await api.get(`/api/intakeCalc/listUserNutrientGroups/${userId}`);
+
+        if (res.data.success && Array.isArray(res.data.groups)) {
+          setGroups(res.data.groups.map((g: any) => ({ id: g.userNutrientId, name: g.nutrientGroupName })));
+        } else {
+          setGroups([]);
+        }
+
+      } catch (err : any) {
+        console.error('list groups error:', err);
+
+        const status = err?.response?.status;
+        const message = err?.response?.data?.message;
+
+        if (status == 500) {
+          Alert.alert('서버 오류', message);
+        } else {
+          Alert.alert('네트워크 오류', '서버에 연결할 수 없습니다.');
+        }
+      }
+    })();
+  }, [userId, isFocused]);
 
   useFocusEffect(
     useCallback(() => {
@@ -41,10 +72,10 @@ export default function IntakeListScreen({ navigation }: any) {
     }, [navigation])
   );
 
-  const renderItem = ({ item }: any) => (
+  const renderItem = ({ item }: { item: GroupItem }) => (
     <TouchableOpacity
       style={styles.card}
-      onPress={() => navigation.navigate("IntakeDetailScreen", { id: item.id })}
+      onPress={() => navigation.navigate("IntakeDetailScreen", { id: item.id, name: item.name })}
     >
       <View style={styles.row}>
         <Icon
@@ -71,11 +102,11 @@ export default function IntakeListScreen({ navigation }: any) {
         {/* 상단 커스텀 뒤로가기 버튼 제거됨 */}
         <Text style={styles.header}>영양소 목록</Text>
 
-        {supplements.length === 0 ? (
+        {groups.length === 0 ? (
           <Text style={styles.emptyText}>등록된 영양소가 없습니다.</Text>
         ) : (
           <FlatList
-            data={supplements}
+            data={groups}
             keyExtractor={(item) => item.id}
             renderItem={renderItem}
             contentContainerStyle={{ paddingBottom: 80 }}

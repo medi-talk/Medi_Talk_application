@@ -15,12 +15,29 @@ import {
 } from "react-native";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { COLORS, FONTS, SIZES } from "./styles/theme";
+import api from "./utils/api";
 import { useAppStore } from "./store/appStore";
 import { launchCamera } from "react-native-image-picker";
 import { analyzeNutritionForIntake, applyOcrToNutrients, type IntakeItemsResult } from "./opencv";
 
+const nutrientIdMap: Record<string, number> = {
+  vitaminA: 1,
+  vitaminD: 2,
+  vitaminE: 3,
+  vitaminK: 4,
+  vitaminC: 5,
+  thiamin: 6,
+  riboflavin: 7,
+  vitaminB6: 8,
+  folate: 9,
+  vitaminB12: 10,
+  pantothenic: 11,
+  biotin: 12,
+};
+
 export default function IntakeAddScreen({ navigation }: any) {
-  const { addIntake } = useAppStore();
+  const { state } = useAppStore();
+  const userId = state.user?.id;
 
   const [groupName, setGroupName] = useState("");
   const [nutrients, setNutrients] = useState({
@@ -128,20 +145,54 @@ export default function IntakeAddScreen({ navigation }: any) {
     setNutrients((prev) => ({ ...prev, [key]: value }));
   };
 
-  const handleSave = () => {
-    if (!groupName.trim()) {
+  // 숫자 정규화
+  const toZeroNumber = (v: unknown) => {
+    if (v === null || v == undefined) return 0;
+    const s = String(v).replace(/,/g, "").trim();
+    if (s === "") return 0;
+    const n = Number(s);
+    return Number.isFinite(n) ? n : 0;
+  };
+
+  const buildNutrientsPayload = () => {
+    const nutrientIntakes: { nutrientId: number; intake: number }[] = [];
+    Object.entries(nutrients).forEach(([key, value]) => {
+      const nutrientId = nutrientIdMap[key];
+      const intake = toZeroNumber(value);
+      nutrientIntakes.push({ nutrientId, intake });
+    });
+    return nutrientIntakes;
+  };
+
+  const handleSave = async () => {
+    try {
+      if (!groupName.trim()) {
       Alert.alert("입력 오류", "영양소 그룹명을 입력하세요.");
       return;
+      }
+
+      const nutrientsPayload = buildNutrientsPayload();
+
+      const res = await api.post(`/api/intakeCalc/createUserNutrientGroupWithIntakes/${userId}`, {
+        groupName: groupName.trim(),
+        nutrients: nutrientsPayload,
+      });
+      if (res.data.success) {
+        Alert.alert("저장 완료", "영양소가 추가되었습니다.");
+        navigation.goBack();
+      } 
+    } catch (err: any) {
+      console.error("Save Intake Error:", err);
+
+      const status = err?.response?.status;
+      const message = err?.response?.data?.message;
+
+      if (status == 500) {
+        Alert.alert('서버 오류', message);
+      } else {
+        Alert.alert('네트워크 오류', '서버에 연결할 수 없습니다.');
+      }
     }
-
-    addIntake({
-      id: Date.now().toString(),
-      name: groupName,
-      dose: JSON.stringify(nutrients),
-    });
-
-    Alert.alert("저장 완료", "영양소가 추가되었습니다.");
-    navigation.goBack();
   };
 
   return (

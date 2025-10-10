@@ -1,5 +1,5 @@
 // IntakeEditScreen.tsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import {
   View,
   Text,
@@ -13,13 +13,73 @@ import {
 } from "react-native";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { COLORS, FONTS, SIZES } from "./styles/theme";
-import { useAppStore } from "./store/appStore";
+import api from "./utils/api";
+
+type intakeNutrient = {
+  nutrientId: number;
+  intake: number | string;
+};
+
+type EditParams = {
+  userNutrientId: number;
+  groupTitle: string;
+  intakes: intakeNutrient[];
+};
+
+const nutrientIdMap: Record<string, number> = {
+  vitaminA: 1,
+  vitaminD: 2,
+  vitaminE: 3,
+  vitaminK: 4,
+  vitaminC: 5,
+  thiamin: 6,
+  riboflavin: 7,
+  vitaminB6: 8,
+  folate: 9,
+  vitaminB12: 10,
+  pantothenic: 11,
+  biotin: 12,
+};
+
+const labelList: Array<[label: string, key: keyof NutrientsShape]> = [
+  ["비타민 A (μg RAE)", "vitaminA"],
+  ["비타민 D (μg)", "vitaminD"],
+  ["비타민 E (mg α-TE)", "vitaminE"],
+  ["비타민 K (μg)", "vitaminK"],
+  ["비타민 C (mg)", "vitaminC"],
+  ["티아민 (mg)", "thiamin"],
+  ["리보플라빈 (mg)", "riboflavin"],
+  ["비타민 B6 (mg)", "vitaminB6"],
+  ["엽산 (μg)", "folate"],
+  ["비타민 B12 (μg)", "vitaminB12"],
+  ["판토텐산 (mg)", "pantothenic"],
+  ["비오틴 (μg)", "biotin"],
+];
+
+type NutrientsShape = {
+  vitaminA: string;
+  vitaminD: string;
+  vitaminE: string;
+  vitaminK: string;
+  vitaminC: string;
+  thiamin: string;
+  riboflavin: string;
+  vitaminB6: string;
+  folate: string;
+  vitaminB12: string;
+  pantothenic: string;
+  biotin: string;
+};
+
 
 export default function IntakeEditScreen({ route, navigation }: any) {
-  const { id } = route.params;
-  const { state, updateIntake } = useAppStore();
-  const [groupName, setGroupName] = useState("");
-  const [nutrients, setNutrients] = useState({
+
+  const { 
+    userNutrientId, groupTitle: initialGroupTitle, intakes 
+  } = (route.params as EditParams) ?? ({} as EditParams);
+
+  const [groupName, setGroupName] = useState(initialGroupTitle || "");
+  const [nutrients, setNutrients] = useState<NutrientsShape>({
     vitaminA: "",
     vitaminD: "",
     vitaminE: "",
@@ -34,39 +94,82 @@ export default function IntakeEditScreen({ route, navigation }: any) {
     biotin: "",
   });
 
+  // id -> key 맵핑
+  const idToKey = useMemo(() => {
+    const rev: Record<number, keyof NutrientsShape> = {};
+    (Object.keys(nutrientIdMap) as Array<keyof NutrientsShape>).forEach((key) => {
+      rev[nutrientIdMap[key]] = key;
+    });
+    return rev;
+  }, []);
+
   useEffect(() => {
-    const found = state.intakes.find((i) => i.id === id);
-    if (found) {
-      setGroupName(found.name);
-      try {
-        const parsed = JSON.parse(found.dose);
-        setNutrients(parsed);
-      } catch {
-        console.warn("영양소 데이터 파싱 실패");
-      }
+    try {
+      const next: NutrientsShape = { ...nutrients };
+      intakes.forEach(({ nutrientId, intake }) => {
+        const key = idToKey[nutrientId];
+        if (key) {
+          next[key] = String(intake);
+        }
+      });
+      setNutrients(next);
+    } catch {
+      console.warn("영양소 데이터 파싱 실패");
     }
-  }, [id, state.intakes]);
+  }, [userNutrientId, intakes, idToKey]);
 
   const handleChange = (key: string, value: string) => {
     setNutrients((prev) => ({ ...prev, [key]: value }));
   };
 
-  const handleSave = () => {
+  // 숫자 정규화
+  const toZeroNumber = (v: unknown) => {
+    if (v === null || v == undefined) return 0;
+    const s = String(v).replace(/,/g, "").trim();
+    if (s === "") return 0;
+    const n = Number(s);
+    return Number.isFinite(n) ? n : 0;
+  };
+
+  const buildNutrientsPayload = () => {
+    return (Object.keys(nutrientIdMap) as Array<keyof NutrientsShape>).map((key) => ({
+      nutrientId: nutrientIdMap[key],
+      intake: toZeroNumber(nutrients[key]),
+    }));
+  };
+
+  const handleSave = async () => {
     if (!groupName.trim()) {
       Alert.alert("입력 오류", "영양소 그룹명을 입력하세요.");
       return;
     }
 
-    const updated = {
-      id,
-      name: groupName,
-      dose: JSON.stringify(nutrients),
-    };
+    try {
+      const payload = {
+        groupName: groupName.trim(),
+        nutrients: buildNutrientsPayload(),
+      };
 
-    updateIntake(updated);
-    Alert.alert("수정 완료", "영양소 정보가 수정되었습니다.");
+      const res = await api.put(`/api/intakeCalc/updateUserNutrientGroupWithIntakes/${userNutrientId}`, payload);
 
-    navigation.goBack();
+      if (res.data.success) {
+        Alert.alert("수정 완료", "영양소 정보가 수정되었습니다.");
+        navigation.goBack();
+      }
+
+
+    } catch (err : any) {
+      console.error("Error updating nutrient group:", err);
+      
+      const status = err?.response?.status;
+      const message = err?.response?.data?.message;
+
+      if (status == 500) {
+        Alert.alert('서버 오류', message);
+      } else {
+        Alert.alert('네트워크 오류', '서버에 연결할 수 없습니다.');
+      }
+    }
   };
 
   return (
