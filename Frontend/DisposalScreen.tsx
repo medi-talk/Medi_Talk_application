@@ -1,5 +1,5 @@
 // DisposalScreen.tsx
-import React, { useMemo } from "react";
+import React, { useMemo, useEffect, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -8,16 +8,33 @@ import {
   StatusBar,
   FlatList,
   TouchableOpacity,
+  ActivityIndicator,
+  Alert,
 } from "react-native";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { COLORS, SIZES, FONTS } from "./styles/theme";
 import { useAppStore } from "./store/appStore";
+import api from "./utils/api";
 
 export type DisposalItem = {
   id: string;
   name: string;
   expiry: string;
+  discardId: number;
 };
+
+type DiscardMedicationData = {
+  userMedicationId: number;
+  medicationDiscardId: number;
+  medicationName: string;
+  endDate: string | null;
+  expirationDate: string | null;
+}
+
+function toYMD(dateStr: string) {
+  if (!dateStr) return "";
+  return dateStr.length >= 10 ? dateStr.slice(0, 10) : dateStr;
+}
 
 function diffDays(expiryISO: string) {
   const today = new Date();
@@ -36,13 +53,62 @@ function badgeColor(d: number) {
 
 export default function DisposalScreen({ navigation }: any) {
   const { state } = useAppStore();
+  const userId = state.user?.id;
+
+  const [items, setItems] = useState<DisposalItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchList = useCallback(async () => {
+    try {
+      const res = await api.get(`/api/discardInfo/listDiscardMedications/${userId}`);
+      const list: DiscardMedicationData[] = res?.data?.medications ?? [];
+
+      const mapped: DisposalItem[] = list
+        .map((m) => {
+          const chosen = 
+            (m.endDate && toYMD(m.endDate)) ||
+            (m.expirationDate && toYMD(m.expirationDate)) ||
+            "";
+          if (!chosen) return null;
+          return {
+            id: String(m.userMedicationId),
+            name: m.medicationName,
+            expiry: chosen,
+            discardId: m.medicationDiscardId,
+          };
+        })
+        .filter((m): m is DisposalItem => !!m);
+      
+      setItems(mapped);
+
+    } catch (err : any) {
+      console.error("❌ load discard medications error:", err);
+      setItems([]);
+
+      const status = err?.response?.status;
+      const message = err?.response?.data?.message;
+
+      if (status == 500) {
+        Alert.alert('서버 오류', message);
+      } else {
+        Alert.alert('네트워크 오류', '서버에 연결할 수 없습니다.');
+      }
+
+    } finally {
+      setLoading(false);
+    }
+  }, [userId]);
+
+  useEffect(() => {
+    fetchList();
+  }, [fetchList]);
 
   const sorted = useMemo(
     () =>
-      [...state.disposals].sort(
+      [...items].sort(
         (a, b) => diffDays(a.expiry) - diffDays(b.expiry)
       ),
-    [state.disposals]
+    [items]
   );
 
   const renderItem = ({ item }: { item: DisposalItem }) => {
@@ -65,7 +131,10 @@ export default function DisposalScreen({ navigation }: any) {
 
         {/* ? 버튼 (폐기 안내 이동) */}
         <TouchableOpacity
-          onPress={() => navigation.navigate("DisposalGuide", { id: item.id })}
+          onPress={() => navigation.navigate("DisposalGuide", { 
+            medicationDiscardId: item.discardId,
+            medicationName: item.name
+           })}
           style={{ marginLeft: 8 }}
         >
           <Icon name="help-circle-outline" size={22} color={COLORS.primary} />
@@ -73,6 +142,18 @@ export default function DisposalScreen({ navigation }: any) {
       </View>
     );
   };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <StatusBar barStyle="dark-content" />
+        <View style={[styles.empty, { gap: 12 }]}>
+          <ActivityIndicator />
+          <Text style={styles.sub}>불러오는 중...</Text>
+        </View>
+      </SafeAreaView>
+    )
+  }
 
   return (
     <SafeAreaView style={styles.safe}>

@@ -1,5 +1,5 @@
 // MedicationEditScreen.tsx
-import React, { useState } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   View,
   Text,
@@ -16,70 +16,196 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import { Picker } from "@react-native-picker/picker";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { COLORS, SIZES, FONTS } from "./styles/theme";
-import { useAppStore } from "./store/appStore";
+import api from "./utils/api";  
+
+type DiscardType = { id: number; type: string };
 
 function fmt(date: Date) {
   return date.toISOString().split("T")[0];
 }
 
+// minutes -> "HH:MM:SS" 변환 (MySQL TIME 형식)
+function minutesToTimeStr(mins: number | string): string | null {
+  const minutes = Number(mins);
+  if (!Number.isFinite(minutes) || minutes <= 0) return null;
+
+  const h = Math.floor(minutes / 60);
+  const m = Math.floor(minutes % 60);
+  const hh = String(h).padStart(2, "0");
+  const mm = String(m).padStart(2, "0");
+
+  return `${hh}:${mm}:00`;
+};
+
+// "오전/오후 00:00" -> "HH:MM:SS" 변환 (MySQL TIME 형식)
+function displayTimeToTimeStr(disp: string): string | null {
+  if (!disp) return null;
+
+  const time = disp.match(/(오전|오후)\s*(\d{1,2}):(\d{2})/);
+  if (!time) return null;
+  
+  const [, ampm, hhStr, mmStr] = time;
+  let hh = Number(hhStr);
+  const mm = Number(mmStr);
+  if (ampm === "오전") {
+    if (hh === 12) hh = 0; // 12 AM -> 0
+  } else {
+    if (hh !== 12) hh += 12; // PM, 12 PM 제외하고 +12
+  }
+  const hhP = String(hh).padStart(2, "0");
+  const mmP = String(mm).padStart(2, "0");
+
+  return `${hhP}:${mmP}:00`;
+};
+
+// HH:mm 또는 "오전 08:00" 같은 문자열 변환
+function displayKoreanTime(hhmm: string) {
+  if (!hhmm.includes(":")) return hhmm;
+  const [hStr, mStr] = hhmm.split(":");
+  const h = parseInt(hStr, 10);
+  const m = parseInt(mStr, 10);
+  if (isNaN(h) || isNaN(m)) return hhmm;
+
+  const am = h < 12;
+  const period = am ? "오전" : "오후";
+  let dispH = h % 12;
+  if (dispH === 0) dispH = 12;
+  return `${period} ${dispH}:${String(m).padStart(2, "0")}`;
+}
+
+// "HH:MM:SS" -> "HH:MM" 변환
+function timeStrToHHMM(t: string) {
+  const m = t?.match(/^(\d{2}):(\d{2}):\d{2}$/);
+  if (!m) return t;
+  return `${m[1]}:${m[2]}`;
+}
+
+
 export default function MedicationEditScreen({ route, navigation }: any) {
-  const { state, updateLinked, updateTimer, addTimer, removeTimer } =
-    useAppStore();
+  const id = route.params?.userMedicationId;
 
-  const passed = route.params?.medication ?? null;
-  const id = route.params?.id ?? passed?.id;
-  const medication =
-    (id ? state.medications.find((m) => m.id === id) : null) ?? passed;
+  // 약 이름
+  const [medicationName, setMedicationName] = useState("");
 
-  const [medicationName, setMedicationName] = useState(medication?.name ?? "");
-  const [selectedType, setSelectedType] = useState(medication?.type ?? "");
-
-  const [expiryDate, setExpiryDate] = useState(
-    medication?.expiry ? new Date(medication.expiry) : new Date()
-  );
-  const [startDate, setStartDate] = useState(
-    medication?.startDate ? new Date(medication.startDate) : new Date()
-  );
-  const [endDate, setEndDate] = useState(
-    medication?.endDate ? new Date(medication.endDate) : new Date()
+  // 약 종류
+  const [types, setTypes] = useState<DiscardType[]>([]);
+  const [typesLoading, setTypesLoading] = useState(false);
+  const [selectedTypeId, setSelectedTypeId] = useState<number | null>(null);
+  const selectedType = useMemo(
+    () => types.find((t) => t.id === selectedTypeId)?.type ?? "",
+    [types, selectedTypeId]
   );
 
-  const [alarmFlag, setAlarmFlag] = useState(medication?.alarmFlag ?? true);
-  const [familyShare, setFamilyShare] = useState(
-    medication?.familyShare ?? false
-  );
-  const [nightSilent, setNightSilent] = useState(
-    medication?.nightSilent ?? false
-  );
+  // 날짜
+  const [expiryDate, setExpiryDate] = useState(new Date());
+  const [startDate, setStartDate] = useState(new Date());
+  const [endDate, setEndDate] = useState(new Date());
 
+  // 플래그
+  const [alarmFlag, setAlarmFlag] = useState(true);
+  const [familyShare, setFamilyShare] = useState(false);
+  const [nightSilent, setNightSilent] = useState(false);
+
+  // 피커
   const [showExpiryPicker, setShowExpiryPicker] = useState(false);
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
 
-  const [intervalMinutes, setIntervalMinutes] = useState(
-    medication?.intervalMinutes ? String(medication.intervalMinutes) : ""
-  );
-  const [alarmTimes, setAlarmTimes] = useState<string[]>(
-    Array.isArray(medication?.times) ? medication!.times : []
-  );
+  // 간격/알람
+  const [intervalMinutes, setIntervalMinutes] = useState("");
+  const [alarmTimes, setAlarmTimes] = useState<string[]>([]);
   const [showPickerIndex, setShowPickerIndex] = useState<number | null>(null);
 
-  // 모드 판별 (복용기간 / 유통기한)
-  const [mode, setMode] = useState<"period" | "expiry">(
-    medication?.expiry && !medication?.startDate && !medication?.endDate
-      ? "expiry"
-      : "period"
-  );
+  // 모드(기간/유통기한) + 초기 간격/알람 모드
+  const [mode, setMode] = useState<"period" | "expiry">("period");
+  const [initialMode, setInitialMode] = useState<"interval" | "alarm">("interval");
 
-  // interval/alarm 구분은 그대로 유지
-  const initialMode =
-    medication?.intervalMinutes && medication.intervalMinutes > 0
-      ? "interval"
-      : medication?.times && medication.times.length > 0
-      ? "alarm"
-      : "interval";
+  // 약 종류 API 호출
+  useEffect(() => {
+    (async () => {
+      try {
+        setTypesLoading(true);
 
-  const medTypes = ["해열제", "항생제", "진통제", "혈압약"];
+        const res = await api.get(`/api/discardInfo/listMedicationDiscardTypes`);
+
+        if (res.data.success) {
+          const list: DiscardType[] = (res.data.types || []).map((t: any) => ({
+            id: t.medicationDiscardId,
+            type: t.medicationType,
+          }));
+          setTypes(list);
+        } else {
+          Alert.alert("오류", "약 종류를 불러오지 못했습니다.");
+        }
+      } catch (err : any) {
+        console.error("❌ load discard types error:", err);
+
+        const status = err?.response?.status;
+        const message = err?.response?.data?.message;
+
+        if (status == 500) {
+          Alert.alert('서버 오류', message);
+        } else {
+          Alert.alert('네트워크 오류', '서버에 연결할 수 없습니다.');
+        }
+      } finally {
+        setTypesLoading(false);
+      }
+    })();
+  }, []);
+
+  // 기존 약 정보 불러오기
+  useEffect(() => {
+    if (!id) return;
+    (async () => {
+      try {
+        const res = await api.get(`/api/medication/getUserMedicationDetail/${id}`);
+
+        if (!res.data.success) {
+          Alert.alert("오류", "약 정보를 불러오지 못했습니다.");
+          return;
+        }
+
+        const med = res.data.medication;
+
+        setMedicationName(med.medicationName);
+        setSelectedTypeId(med.medicationDiscardId || null);
+
+        if (med.startDate) setStartDate(new Date(med.startDate));
+        if (med.endDate) setEndDate(new Date(med.endDate));
+        if (med.expirationDate) setExpiryDate(new Date(med.expirationDate));
+
+        setAlarmFlag(!!med.alarmFlag);
+        setFamilyShare(!!med.familyNotifyFlag);
+        setNightSilent(!!med.dawnAlarmOffFlag);
+
+        const isExpiry = !!med.expirationDate && !med.startDate && !med.endDate;
+        setMode(isExpiry ? "expiry" : "period");
+        
+        const ivMin = Number(med.intervalMinutes ?? 0);
+        setIntervalMinutes(ivMin > 0 ? String(ivMin) : "");
+        const timesDisp = Array.isArray(med.alarmTimes)
+          ? med.alarmTimes
+            .map((t: string) => displayKoreanTime(timeStrToHHMM(t)))
+            .filter(Boolean)
+          : [];
+        setAlarmTimes(timesDisp);
+        setInitialMode(ivMin > 0 ? "interval" : timesDisp.length > 0 ? "alarm" : "interval");
+
+      } catch (err : any) {
+        console.error("❌ load medication error:", err);
+
+        const status = err?.response?.status;
+        const message = err?.response?.data?.message;
+
+        if (status == 500) {
+          Alert.alert('서버 오류', message);
+        } else {
+          Alert.alert('네트워크 오류', '서버에 연결할 수 없습니다.');
+        }
+      }
+    })();
+  }, [id]);
 
   const addAlarmTime = () => {
     setAlarmTimes([...alarmTimes, ""]);
@@ -90,12 +216,12 @@ export default function MedicationEditScreen({ route, navigation }: any) {
     setAlarmTimes(alarmTimes.filter((_, i) => i !== index));
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!medicationName.trim()) {
       Alert.alert("알림", "약 이름을 입력하세요.");
       return;
     }
-    if (!selectedType.trim()) {
+    if (selectedTypeId === null) {
       Alert.alert("알림", "약 종류를 선택하세요.");
       return;
     }
@@ -124,53 +250,52 @@ export default function MedicationEditScreen({ route, navigation }: any) {
       filteredTimes = [];
     }
 
-    let safeTotalSec = minutes > 0 ? minutes * 60 : 0;
-    if (!safeTotalSec || isNaN(safeTotalSec) || safeTotalSec <= 0) {
-      safeTotalSec = 60;
-    }
+    const intervalTimeStr = minutesToTimeStr(minutes);
+    const alarmTimeList = Array.from(
+      new Set(
+        filteredTimes
+          .map(displayTimeToTimeStr)
+          .filter((t): t is string => !!t)
+      )
+    );
 
-    const countMode: "auto" | "manual" =
-      minutes > 0 ? "manual" : filteredTimes.length > 0 ? "auto" : "manual";
+    const isPeriod = mode === "period";
+    const medicationPayload = {
+      medicationDiscardId: selectedTypeId,
+      medicationName: medicationName.trim(),
+      startDate: isPeriod ? fmt(startDate) : null,
+      endDate: isPeriod ? fmt(endDate) : null,
+      expirationDate: !isPeriod ? fmt(expiryDate) : null,
+      intervalTime: isPeriod && initialMode === "interval" ? intervalTimeStr : null,
+      alarmFlag: !!alarmFlag,
+      dawnAlarmOffFlag: !!nightSilent,
+      familyNotifyFlag: !!familyShare,
+    };
 
-    updateLinked({
-      ...medication,
-      name: medicationName.trim(),
-      type: selectedType,
-      startDate: mode === "period" ? fmt(startDate) : "",
-      endDate: mode === "period" ? fmt(endDate) : "",
-      expiry: mode === "expiry" ? fmt(expiryDate) : "",
-      times: mode === "period" ? filteredTimes : [],
-      intervalMinutes: mode === "period" ? minutes : 0,
-      alarmFlag,
-      familyShare,
-      nightSilent,
-      countMode,
-    });
+    try {
+      const isAlarmMode = (mode === "period" && initialMode === "alarm");
 
-    const targetTimer = state.timers.find((t) => t.id === medication.id);
-    if (mode === "period" && minutes > 0) {
-      if (targetTimer) {
-        updateTimer({
-          ...targetTimer,
-          name: medicationName.trim(),
-          totalSec: safeTotalSec,
-          baseTime: 0,
-          isRunning: false,
-          pauseOffset: 0,
+      if (isAlarmMode) {
+        await api.put(`/api/medication/updateUserMedicationWithAlarms/${id}`, {
+          medication: medicationPayload,
+          alarmTimes: alarmTimeList,
         });
       } else {
-        addTimer({
-          id: medication.id,
-          name: medicationName.trim(),
-          times: [],
-          totalSec: safeTotalSec,
-          baseTime: 0,
-          isRunning: false,
-          pauseOffset: 0,
+        await api.put(`/api/medication/updateUserMedication/${id}`, {
+          medication: medicationPayload
         });
       }
-    } else {
-      if (targetTimer) removeTimer(medication.id);
+    } catch (err : any) {
+      console.error("❌ update medication error:", err);
+
+      const status = err?.response?.status;
+      const message = err?.response?.data?.message;
+
+      if (status == 500) {
+        Alert.alert('서버 오류', message);
+      } else {
+        Alert.alert('네트워크 오류', '서버에 연결할 수 없습니다.');
+      }
     }
 
     Alert.alert("완료", "수정되었습니다.", [
@@ -178,7 +303,7 @@ export default function MedicationEditScreen({ route, navigation }: any) {
     ]);
   };
 
-  if (!medication) return null;
+  if (!id) return null;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -205,14 +330,26 @@ export default function MedicationEditScreen({ route, navigation }: any) {
         <Text style={styles.label}>약 종류 선택</Text>
         <View style={styles.pickerBox}>
           <Picker
-            selectedValue={selectedType}
-            onValueChange={(itemValue) => setSelectedType(itemValue)}
+            selectedValue={selectedTypeId ?? ""}
+            onValueChange={(val) => {
+              if (val === "" || val === null || val === undefined) {
+                setSelectedTypeId(null);
+              } else if (typeof val === "number") {
+                setSelectedTypeId(val);
+              } else {
+                const num = Number(val);
+                setSelectedTypeId(Number.isFinite(num) ? num : null);
+              }
+            }}
             style={[styles.picker, { color: COLORS.darkGray }]}
             dropdownIconColor={COLORS.primary}
           >
-            <Picker.Item label="약 종류를 선택하세요" value="" />
-            {medTypes.map((t) => (
-              <Picker.Item key={t} label={t} value={t} />
+            <Picker.Item
+              label={typesLoading ? "불러오는 중..." : "약 종류를 선택하세요"}
+              value=""
+              />
+            {types.map((t) => (
+              <Picker.Item key={t.id} label={t.type} value={t.id} />
             ))}
           </Picker>
         </View>

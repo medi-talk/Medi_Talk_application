@@ -8,11 +8,23 @@ import {
   FlatList,
   TouchableOpacity,
   Button,
+  Alert
 } from "react-native";
 import notifee from "@notifee/react-native";
 import { useIsFocused } from "@react-navigation/native";
 import { COLORS, SIZES, FONTS } from "./styles/theme";
-import { useAppStore, TimerItem, MedicationItem } from "./store/appStore";
+import { useAppStore, TimerItem } from "./store/appStore";
+import api from "./utils/api";
+
+
+type TimerData = {
+  userMedicationId: number;
+  medicationName: string;
+  intervalTime: string | null;
+  intervalMinutes: number | null;
+  alarmFlag: boolean;
+  dawnAlarmOffFlag: boolean;
+};
 
 // 알람 예정 시각 계산 → "HH:mm"
 function formatAlarmTime(totalSec: number) {
@@ -26,9 +38,12 @@ function formatAlarmTime(totalSec: number) {
 }
 
 function TimerScreen() {
-  const { state, updateTimer, removeTimer } = useAppStore();
+  const { state, updateTimer, removeTimer, addTimer } = useAppStore();
+  const userId = state.user?.id;
   const isFocused = useIsFocused();
   const [now, setNow] = useState(new Date());
+
+  const [timers, setTimers] = useState<TimerData[]>([]);
 
   const notifiedRef = useRef<Set<string>>(new Set());
 
@@ -44,16 +59,34 @@ function TimerScreen() {
     })();
   }, []);
 
-  // 유효 타이머만 필터링
-  const items = useMemo(() => {
-    const medsById = new Map<string, MedicationItem>(
-      state.medications.map((m) => [m.id, m])
-    );
-    return state.timers.filter((t) => {
-      const med = medsById.get(t.id);
-      return med && Number(med.intervalMinutes) > 0;
-    });
-  }, [state.medications, state.timers]);
+  // 타이머 목록 API 호출
+  useEffect(() => {
+    if (!isFocused || !userId) return;
+    (async () => {
+      try {
+        const res = await api.get(`/api/intakeTimer/listUserIntakeTimers/${userId}`);
+
+        if (res.data.success) {
+          setTimers(res.data.timers || [] as TimerData[]);
+        } else {
+          Alert.alert("오류", "타이머 목록을 불러오지 못했습니다.");
+          setTimers([]);
+        }
+      } catch (err: any) {
+        console.error("❌ listUserIntakeTimers error:", err);
+        setTimers([]);
+
+        const status = err?.response?.status;
+        const message = err?.response?.data?.message;
+
+        if (status == 500) {
+          Alert.alert('서버 오류', message);
+        } else {
+          Alert.alert('네트워크 오류', '서버에 연결할 수 없습니다.');
+        }
+      }
+    })();
+  }, [isFocused, userId]);
 
   // 1초마다 now 갱신
   useEffect(() => {
@@ -62,20 +95,49 @@ function TimerScreen() {
     return () => clearInterval(intervalId);
   }, [isFocused]);
 
-  // 잘못된 타이머 정리
+  // 잘못된 로컬 타이머 정리
   useEffect(() => {
-    const medsById = new Map(state.medications.map((m) => [m.id, m]));
+    if (!timers?.length && !state.timers?.length) return;
+
+    const serverMap = new Map<string, TimerData>(
+      (timers || []).map((t) => [String(t.userMedicationId), t])
+    );
+    
     const toRemove = state.timers
       .filter((t) => {
-        const med = medsById.get(t.id);
-        return !med || !med.intervalMinutes || med.intervalMinutes <= 0;
+        const s = serverMap.get(t.id);
+        return !s || !s.intervalMinutes || s.intervalMinutes <= 0;
       })
       .map((t) => t.id);
 
-    if (toRemove.length) {
-      toRemove.forEach((id) => removeTimer(id));
-    }
-  }, [state.medications, state.timers, removeTimer]);
+      if (toRemove.length) {
+        toRemove.forEach((id) => removeTimer(id));
+      }
+  }, [timers, state.timers, removeTimer]);
+
+  // 서버 목록 + 로컬 상태 병합하여 화면용 아이템 생성
+  const items = useMemo(() => {
+    return (timers || [])
+      .filter((s) => !!s && (s.intervalMinutes || 0) > 0)
+      .map((s) => {
+        const id = String(s.userMedicationId);
+        const local = state.timers.find((t) => t.id === id);
+
+        const safeTotalSec = Math.max(60, (s.intervalMinutes || 0) * 60);
+
+        const merged: TimerItem & { _intervalMinutes: number } = {
+          id,
+          name: s.medicationName,
+          times: [],
+          totalSec: local?.totalSec || safeTotalSec,
+          baseTime: local?.baseTime || 0,
+          isRunning: local?.isRunning || false,
+          pauseOffset: local?.pauseOffset || 0,
+          _intervalMinutes: s.intervalMinutes || 0, // 핸들러 안전초 계산용
+        };
+        return merged;
+      });
+  }, [timers, state.timers]);
 
   // 타이머 종료 시 알림
   useEffect(() => {
@@ -113,11 +175,26 @@ function TimerScreen() {
     });
   }, [now, items, updateTimer]);
 
-  const handleStart = (item: TimerItem) => {
+  const handleStart = (item: TimerItem & { _intervalMinutes: number }) => {
     if (!item?.id) return;
 
-    let safeSec = Number(item.totalSec);
-    if (!safeSec || isNaN(safeSec) || safeSec <= 0) safeSec = 60;
+    const safeSec = Math.max(
+      60,
+      Number(item._intervalMinutes || 0) * 60 || Number(item.totalSec) || 60
+    );
+
+    const local = state.timers.find((t) => t.id === item.id);
+    if (!local) {
+      addTimer({
+        id: item.id,
+        name: item.name,
+        times: [],
+        totalSec: safeSec,
+        baseTime: 0,
+        isRunning: false,
+        pauseOffset: 0,
+      });
+    }
 
     updateTimer({
       ...item,
@@ -138,10 +215,26 @@ function TimerScreen() {
     });
   };
 
-  const handleReset = (item: TimerItem) => {
+  const handleReset = (item: TimerItem & { _intervalMinutes: number }) => {
     if (!item?.id) return;
-    let safeSec = Number(item.totalSec);
-    if (!safeSec || isNaN(safeSec) || safeSec <= 0) safeSec = 60;
+
+    const safeSec = Math.max(
+      60,
+      Number(item._intervalMinutes || 0) * 60 || Number(item.totalSec) || 60
+    );
+
+    const local = state.timers.find((t) => t.id === item.id);
+    if (!local) {
+      addTimer({
+        id: item.id,
+        name: item.name,
+        times: [],
+        totalSec: safeSec,
+        baseTime: 0,
+        isRunning: false,
+        pauseOffset: 0,
+      });
+    }
 
     updateTimer({
       ...item,
@@ -153,15 +246,13 @@ function TimerScreen() {
     notifiedRef.current.delete(item.id);
   };
 
-  const renderItem = ({ item }: { item: TimerItem }) => {
+  const renderItem = ({ item }: { item: TimerItem & { _intervalMinutes: number } }) => {
     if (!item?.id) return null;
-    const med = state.medications.find((m) => m.id === item.id);
-    if (!med || !med.intervalMinutes || med.intervalMinutes <= 0) return null;
-
-    let safeSec = Number(item.totalSec);
-    if (!safeSec || isNaN(safeSec) || safeSec <= 0) safeSec = 60;
 
     // 남은 시간 계산
+    let safeSec = Number(item.totalSec);
+    if (!safeSec || isNaN(safeSec) || safeSec <= 0) safeSec = 60;
+    
     const remainingSec =
       item.isRunning && item.baseTime
         ? Math.max(0, Math.floor((item.baseTime - now.getTime()) / 1000))

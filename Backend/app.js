@@ -1,6 +1,9 @@
 const express = require('express');
 const cors = require('cors');
 const usersRoutes = require('./routes/usersRoutes');
+const medicationRoutes = require('./routes/medicationRoutes');
+const intakeTimerRoutes = require('./routes/intakeTimerRoutes');
+const discardInfoRoutes = require('./routes/discardInfoRoutes');
 const intakeCalcRoutes = require('./routes/intakeCalcRoutes');
 
 const app = express();
@@ -14,6 +17,9 @@ app.use((req, res, next) => {
 
 
 app.use('/api/users', usersRoutes);
+app.use('/api/medication', medicationRoutes);
+app.use('/api/intakeTimer', intakeTimerRoutes);
+app.use('/api/discardInfo', discardInfoRoutes);
 app.use('/api/intakeCalc', intakeCalcRoutes);
 
 

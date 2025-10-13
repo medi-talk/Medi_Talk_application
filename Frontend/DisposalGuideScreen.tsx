@@ -1,29 +1,71 @@
-import React from "react";
-import { View, Text, StyleSheet, ScrollView } from "react-native";
+import React, { useEffect, useState, useCallback } from "react";
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert } from "react-native";
 import { useAppStore } from "./store/appStore";
 import { COLORS, SIZES, FONTS } from "./styles/theme";
+import api from "./utils/api";
+
+
+type DiscardInfoData = {
+  medicationType: string;
+  discardMethod: string;
+};
 
 export default function DisposalGuideScreen({ route }: any) {
-  const { id } = route.params;
-  const { state } = useAppStore();
+  const { medicationDiscardId, medicationName } = route.params || {};
+  // const { state } = useAppStore();
 
-  const item = state.disposals.find((d) => d.id === id);
-  const medication = state.medications.find((m) => m.id === id); // 약 정보 찾아오기
+  const [info, setInfo] = useState<DiscardInfoData | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  // 현재는 더미 데이터 (DB 연동 전)
-  const disposalMethods: Record<string, string> = {
-    알약: "포장재 제거 후 내용물만 한 곳에 모아 밀봉하여 처리",
-    시럽: "뚜껑을 닫고 종량제 봉투에 밀봉하여 배출",
-    주사제: "뚜껑을 닫은 후 전용 수거함에 배출",
-  };
+  const fetchInfo = useCallback(async () => {
+    try {
+      const res = await api.get(`/api/discardInfo/getMedicationDiscardInfo/${medicationDiscardId}`);
+      const data: DiscardInfoData | null = res?.data?.info ?? null;
+      setInfo(data);
+    } catch (err : any) {
+      console.error("❌ load discard medications error:", err);
+      setInfo(null);
 
-  const method =
-    disposalMethods[item?.name || ""] || "이 약품에 대한 폐기 방법 정보가 없습니다.";
+      const status = err?.response?.status;
+      const message = err?.response?.data?.message;
 
-  if (!item) {
+      if (status == 500) {
+        Alert.alert('서버 오류', message);
+      } else {
+        Alert.alert('네트워크 오류', '서버에 연결할 수 없습니다.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [medicationDiscardId]);
+
+  useEffect(() => {
+    fetchInfo();
+  }, [fetchInfo]);
+
+  if (loading) {
     return (
       <View style={styles.container}>
-        <Text style={styles.error}>약품 정보를 찾을 수 없습니다.</Text>
+        <ActivityIndicator />
+        <Text style={[styles.value, { marginTop: 8 }]}>
+          폐기 정보 불러오는 중...
+        </Text>
+      </View>
+    );
+  }
+
+  if (!medicationDiscardId) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.error}>유효하지 않은 접근입니다.</Text>
+      </View>
+    );
+  }
+
+  if (!info) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.error}>폐기 정보를 찾을 수 없습니다.</Text>
       </View>
     );
   }
@@ -31,15 +73,15 @@ export default function DisposalGuideScreen({ route }: any) {
   return (
     <ScrollView style={styles.container}>
       {/* 약 이름 */}
-      <Text style={styles.title}>{item.name}</Text>
+      <Text style={styles.title}>{medicationName ?? "의약품"}</Text>
 
       {/* 약 종류 */}
-      <Text style={styles.subTitle}>종류: {medication?.type ?? "정보 없음"}</Text>
+      <Text style={styles.subTitle}>종류: {info?.medicationType ?? "정보 없음"}</Text>
 
       {/* 폐기 방법 */}
       <View style={styles.section}>
         <Text style={styles.label}>폐기 방법</Text>
-        <Text style={styles.value}>{method}</Text>
+        <Text style={styles.value}>{info?.discardMethod ?? "정보 없음"}</Text>
       </View>
 
       {/* 폐기 장소 */}

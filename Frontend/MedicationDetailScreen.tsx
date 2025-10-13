@@ -1,5 +1,5 @@
 // MedicationDetailScreen.tsx
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,9 +8,28 @@ import {
   StatusBar,
   TouchableOpacity,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { COLORS, SIZES, FONTS } from './styles/theme';
-import { useAppStore } from './store/appStore';
+import api from './utils/api';
+
+
+type MedicationData = {
+  userMedicationId: number;
+  medicationDiscardId: number;
+  medicationType: string;
+  medicationName: string;
+  startDate: string | null;
+  endDate: string | null;
+  expirationDate: string | null;
+  intervalTime: number | null;
+  intervalMinutes: number | null;
+  alarmFlag: number | boolean;
+  dawnAlarmOffFlag: number | boolean;
+  familyNotifyFlag: number | boolean;
+  alarmTimes: string[];
+};
 
 // HH:mm 또는 "오전 08:00" 같은 문자열 변환
 function displayKoreanTime(hhmm: string) {
@@ -28,12 +47,102 @@ function displayKoreanTime(hhmm: string) {
 }
 
 export default function MedicationDetailScreen({ route, navigation }: any) {
-  const passed = route.params?.medication ?? null;
-  const passedId = route.params?.id ?? passed?.id;
-  const { state, removeLinked } = useAppStore();
+  const medicationId = route.params?.medicationId;
 
-  const medication =
-    (passedId ? state.medications.find((m) => m.id === passedId) : null) ?? passed ?? null;
+  const [medication, setMedication] = useState<MedicationData | null>(null);
+  const [loading, setLoading] = useState(false);
+
+
+  const fetchDetail = useCallback(async () => {
+    if (!medicationId) {
+      setMedication(null);
+      return;
+    }
+    try {
+      setLoading(true);
+
+      const res = await api.get(`/api/medication/getUserMedicationDetail/${medicationId}`);
+
+      if (res.data.success) {
+        const med: MedicationData = res.data.medication;
+        setMedication(med);
+      } else {
+        Alert.alert('오류', res.data.message || '약 정보를 불러오지 못했습니다.');
+        setMedication(null);
+      }
+
+    } catch (err : any) {
+      console.error("❌ getUserMedicationDetail error:", err);
+
+      setMedication(null);
+
+      const status = err?.response?.status;
+      const message = err?.response?.data?.message;
+
+      if (status == 500) {
+        Alert.alert('서버 오류', message);
+      } else {
+        Alert.alert('네트워크 오류', '서버에 연결할 수 없습니다.');
+      }
+
+    } finally {
+      setLoading(false);
+    }
+  }, [medicationId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchDetail();
+    }, [fetchDetail])
+  );
+
+  const handleDelete = () => {
+    Alert.alert('삭제 확인', '정말 이 약을 삭제하시겠습니까?', [
+      { text: '취소', style: 'cancel' },
+      {
+        text: '삭제',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            const res = await api.delete(`/api/medication/deleteUserMedication/${medicationId}`);
+
+            if (res.data.success) {
+              Alert.alert('삭제 완료', '약이 삭제되었습니다.');
+              navigation.goBack();
+            } else {
+              Alert.alert('삭제 실패', res.data.message);
+            }
+
+          } catch (err : any) {
+            console.error('delete medication error:', err);
+
+            const status = err?.response?.status;
+            const message = err?.response?.data?.message;
+
+            if (status == 500) {
+              Alert.alert('서버 오류', message);
+            } else {
+              Alert.alert('네트워크 오류', '서버에 연결할 수 없습니다.');
+            }
+          }
+        },
+      },
+    ]);
+  };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <StatusBar barStyle="dark-content" />
+        <View style={[styles.container, { alignItems: "center", marginTop: "40%" }]}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={{ ...FONTS.p, color: COLORS.gray, marginTop: 8 }}>
+            로딩 중...
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (!medication) {
     return (
@@ -46,30 +155,23 @@ export default function MedicationDetailScreen({ route, navigation }: any) {
     );
   }
 
-  const handleDelete = () => {
-    Alert.alert('삭제 확인', '정말 이 약을 삭제하시겠습니까?', [
-      { text: '취소', style: 'cancel' },
-      {
-        text: '삭제',
-        style: 'destructive',
-        onPress: () => {
-          removeLinked(medication.id);
-          navigation.goBack();
-        },
-      },
-    ]);
-  };
+  const hasPeriod = medication.startDate && medication.endDate;
+  const intervalMinutes = 
+    typeof medication.intervalMinutes === "number"
+      ? medication.intervalMinutes
+      : null;
+  const alarms = medication.alarmTimes || [];
 
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar barStyle="dark-content" />
       <View style={styles.container}>
-        <Text style={styles.title}>{medication.name}</Text>
+        <Text style={styles.title}>{medication.medicationName}</Text>
 
         <Text style={styles.label}>약 종류</Text>
-        <Text style={styles.value}>{medication.type || '선택 안 함'}</Text>
+        <Text style={styles.value}>{medication.medicationType || '선택 안 함'}</Text>
 
-        {medication.startDate && medication.endDate ? (
+        {hasPeriod ? (
           <>
             <Text style={styles.label}>복용 기간</Text>
             <Text style={styles.value}>
@@ -79,21 +181,21 @@ export default function MedicationDetailScreen({ route, navigation }: any) {
         ) : (
           <>
             <Text style={styles.label}>유통기한</Text>
-            <Text style={styles.value}>{medication.expiry}</Text>
+            <Text style={styles.value}>{medication.expirationDate || "-"}</Text>
           </>
         )}
 
         {/* 복용 알람 */}
-        {medication.intervalMinutes > 0 ? (
+        {intervalMinutes && intervalMinutes > 0 ? (
           <>
             <Text style={styles.label}>복용 간격</Text>
-            <Text style={styles.value}>{medication.intervalMinutes}분</Text>
+            <Text style={styles.value}>{intervalMinutes}분</Text>
           </>
-        ) : medication.times && medication.times.length > 0 ? (
+        ) : alarms.length > 0 ? (
           <>
             <Text style={styles.label}>복용 알람</Text>
-            {medication.times.map((t: string, idx: number) => (
-              <Text key={idx} style={styles.value}>
+            {alarms.map((t, i) => (
+              <Text key={i} style={styles.value}>
                 {displayKoreanTime(t)}
               </Text>
             ))}
@@ -104,17 +206,17 @@ export default function MedicationDetailScreen({ route, navigation }: any) {
         <Text style={styles.value}>{medication.alarmFlag ? 'ON' : 'OFF'}</Text>
 
         <Text style={styles.label}>가족 공개</Text>
-        <Text style={styles.value}>{medication.familyShare ? '예' : '아니오'}</Text>
+        <Text style={styles.value}>{medication.familyNotifyFlag ? '예' : '아니오'}</Text>
 
         <Text style={styles.label}>야간 알림</Text>
         <Text style={styles.value}>
-          {medication.nightSilent ? 'OFF (야간 끔)' : 'ON (야간 알림 허용)'}
+          {medication.dawnAlarmOffFlag ? 'OFF (야간 끔)' : 'ON (야간 알림 허용)'}
         </Text>
 
         <View style={styles.rowButtons}>
           <TouchableOpacity
             style={[styles.editBtn, { flex: 1, marginRight: 6 }]}
-            onPress={() => navigation.navigate('MedicationEdit', { id: medication.id })}
+            onPress={() => navigation.navigate('MedicationEdit', { userMedicationId: medication.userMedicationId })}
           >
             <Text style={styles.editBtnText}>수정하기</Text>
           </TouchableOpacity>
