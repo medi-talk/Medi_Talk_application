@@ -51,7 +51,7 @@ export default function PasswordChangeScreen({ navigation }: any) {
     }
 
     try {
-      const res = await api.put(`/api/users/changeUserPassword/${userId}`, {
+      const res = await api.put(`/api/users/updateUserPassword/${userId}`, {
         currentPassword: currentPw,
         newPassword: newPw,
       });
@@ -60,10 +60,12 @@ export default function PasswordChangeScreen({ navigation }: any) {
         Alert.alert('성공', '비밀번호가 변경되었습니다.', [
           { text: '확인', onPress: () => navigation.goBack() },
         ]);
+      } else {
+        Alert.alert('실패', res.data.message);
       }
 
     } catch (err : any) {
-      console.error('change password error:', err);
+      console.error('update password error:', err);
 
       const status = err?.response?.status;
       const message = err?.response?.data?.message;

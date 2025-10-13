@@ -41,6 +41,7 @@ export type IntakeItem = {
 export type User = {
   id: string;
   name: string;
+  role: 'user' | 'hp';
 } | null;
 
 export type AppState = {

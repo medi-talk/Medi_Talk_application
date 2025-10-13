@@ -34,23 +34,35 @@ export default function SignUpScreen({ navigation }: any) {
     };
 
     const handleSignUp = async () => {
-        try {
-            const res = await api.post(`/api/users/registerUser`, {
-            name,
-            email,
+
+        if (!name.trim() || !email.trim() || !password || !birth || !gender || !phonenumber.trim()) {
+            Alert.alert('회원가입 실패', '모든 필수 항목을 입력해주세요.');
+            return;
+        }
+
+        const userPayload = {
+            name: name.trim(),
+            email: email.trim(),
             password,
             birth,
             gender,
-            phonenumber,
+            phonenumber: phonenumber.trim(),
             pregnant,
-            feeding,
-            });
+            feeding
+        };
+
+        try {
+            
+            const res = await api.post(`/api/users/createUser`, userPayload);
 
             if (res.data.success) {
-            Alert.alert('회원가입 성공 🎉');
-            console.log('SignUp Data:', { name, email, password, birth, gender, phonenumber, pregnant, feeding });
-            navigation.navigate('Login');
+                Alert.alert('회원가입 성공 🎉');
+                console.log('SignUp Data:', userPayload);
+                navigation.navigate('Login');
+                return;
             }
+
+            Alert.alert('회원가입 실패', res.data.message);
 
         } catch (err : any) {
             console.error('register error:', err);
@@ -58,9 +70,7 @@ export default function SignUpScreen({ navigation }: any) {
             const status = err?.response?.status;
             const message = err?.response?.data?.message;
 
-            if (status == 400) {
-                Alert.alert('회원가입 실패', message);
-            } else if (status == 409) {
+             if (status == 409) {
                 Alert.alert('회원가입 실패', message);
             } else if (status == 500) {
                 Alert.alert('서버 오류', message);

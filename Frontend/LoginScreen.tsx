@@ -26,18 +26,20 @@ export default function LoginScreen({ navigation }: any) {
     }
 
     try {
-      const res = await api.post('/api/users/loginUser', {
+      const res = await api.post('/api/users/getUser', {
         userId: email,
         userPassword: password,
       });
 
       if(res.data.success) {
-        const { userId, userName } = res.data.user;
-        setUser({ id: userId, name: userName });
+        const { userId, userName, role } = res.data.user;
+        setUser({ id: userId, name: userName, role });
         Alert.alert('로그인 성공', `${userName}님, 환영합니다!`);
         navigation.navigate('Main');
-      } 
-      
+      } else {
+        Alert.alert('로그인 실패', res.data.message);
+      }
+
     } catch (err : any) {
       console.error('login error:', err);
       

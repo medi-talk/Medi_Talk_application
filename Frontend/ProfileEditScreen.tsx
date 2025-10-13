@@ -33,24 +33,26 @@ export default function ProfileEditScreen({ navigation }: any) {
 
     (async () => {
       try {
-        const res = await api.get(`/api/users/getUserProfile/${userId}`);
+        const res = await api.get(`/api/users/getUserInfo/${userId}`);
         if (res.data.success) {
-          const p = res.data.profile;
-          setName(p.user_name);
+          const info = res.data.userInfo;
+          setName(info.userName);
           setEmail(userId);
-          setPhonenumber(p.phone_number);
-          setBirth(p.birthday);
-          setGender(p.gender);
-          setPregnant(!!p.pregnant_flag);
-          setFeeding(!!p.feeding_flag);
-          setSelectedDate(new Date(p.birthday));
+          setPhonenumber(info.phoneNumber);
+          setBirth(info.birthday);
+          setGender(info.gender);
+          setPregnant(!!info.pregnantFlag);
+          setFeeding(!!info.feedingFlag);
+          setSelectedDate(new Date(info.birthday));
         } else {
           Alert.alert('오류', '프로필을 불러오지 못했습니다.');
         }
       } catch (err: any) {
-        console.error('get profile error:', err);
+        console.error('get info error:', err);
+
         const status = err?.response?.status;
         const message = err?.response?.data?.message;
+
         if (status === 500) Alert.alert('서버 오류', message);
         else Alert.alert('네트워크 오류', '서버에 연결할 수 없습니다.');
       }
@@ -66,26 +68,35 @@ export default function ProfileEditScreen({ navigation }: any) {
   };
 
   const handleSave = async () => {
+
+    if (!userId) return;
+    if (!name.trim() || !phonenumber.trim() || !birth || !gender) {
+      Alert.alert('오류', '모든 필수 항목을 입력해주세요.');
+      return;
+    }
+
     try {
       const payload = {
-        user_name: name,
-        phone_number: phonenumber,
+        userName: name.trim(),
+        phoneNumber: phonenumber.trim(),
         birthday: birth,
         gender: gender,
-        pregnant_flag: pregnant,
-        feeding_flag: feeding,
+        pregnantFlag: pregnant,
+        feedingFlag: feeding,
       };
 
-      const res = await api.put(`/api/users/updateUserProfile/${userId}`, payload);
+      const res = await api.put(`/api/users/updateUserInfo/${userId}`, payload);
       if (res.data.success) {
         Alert.alert('저장 완료', '프로필이 업데이트되었습니다.', [
           { text: '확인', onPress: () => navigation.goBack() },
         ]);
       }
     } catch (err: any) {
-      console.error('update profile error:', err);
+      console.error('update info error:', err);
+
       const status = err?.response?.status;
       const message = err?.response?.data?.message;
+
       if (status === 400) Alert.alert('저장 실패', message);
       else if (status === 500) Alert.alert('서버 오류', message);
       else Alert.alert('네트워크 오류', '서버에 연결할 수 없습니다.');

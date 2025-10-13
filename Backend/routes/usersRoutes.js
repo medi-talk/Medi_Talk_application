@@ -4,18 +4,29 @@ const express = require('express');
 const router = express.Router();
 
 const { 
-  registerUser, 
-  loginUser, 
-  getUserProfile, 
-  updateUserProfile,
-  changeUserPassword
+  getUser,
+  getUserInfo,
+  createUser,
+  updateUserInfo,
+  updateUserPassword,
+  deleteUser
 } = require('../controllers/usersController');
 
 
-router.post('/registerUser', registerUser);
-router.post('/loginUser', loginUser);
-router.get('/getUserProfile/:userId', getUserProfile);
-router.put('/updateUserProfile/:userId', updateUserProfile);
-router.put('/changeUserPassword/:userId', changeUserPassword);
+/* ---------- GET ---------- */
+router.get('/getUserInfo/:userId', getUserInfo);
+
+/* ---------- POST ---------- */
+router.post('/createUser', createUser);
+router.post('/getUser', getUser);
+
+/* ---------- PUT ---------- */
+router.put('/updateUserInfo/:userId', updateUserInfo);
+router.put('/updateUserPassword/:userId', updateUserPassword);
+
+
+/* ---------- DELETE ---------- */
+router.delete('/deleteUser/:userId', deleteUser);
+
 
 module.exports = router;

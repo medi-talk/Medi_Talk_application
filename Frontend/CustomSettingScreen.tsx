@@ -14,6 +14,8 @@ import {
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS, SIZES, FONTS } from './styles/theme';
 import { navigationRef } from './App'; 
+import api from './utils/api';
+import { useAppStore } from './store/appStore'; 
 
 const SettingsRow = ({
   icon,
@@ -49,6 +51,9 @@ const SettingsRow = ({
 );
 
 export default function CustomSettingScreen({ navigation }: any) {
+  const { state } = useAppStore();
+  const userId = state.user?.id;
+
   const [medicationAlarm, setMedicationAlarm] = useState(true);
   const [familyAlarm, setFamilyAlarm] = useState(false);
 
@@ -62,7 +67,35 @@ export default function CustomSettingScreen({ navigation }: any) {
   const handleDeleteAccount = () => {
     Alert.alert('회원 탈퇴', '모든 정보가 영구적으로 삭제됩니다. 정말 탈퇴하시겠습니까?', [
       { text: '취소', style: 'cancel' },
-      { text: '확인', onPress: () => console.log('Account deleted'), style: 'destructive' },
+      { text: '확인',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            const res = await api.delete(`/api/users/deleteUser/${userId}`);
+
+            if (res.data.success) {
+              Alert.alert('성공', '회원 탈퇴가 완료되었습니다.', [
+                { text: '확인', onPress: () => navigation.reset({ index: 0, routes: [{ name: 'Login' }] }) },
+              ]);
+              return;
+            } else {
+              Alert.alert('실패', res.data.message);
+            }
+
+          } catch (err : any) {
+            console.error('delete account error:', err);
+
+            const status = err?.response?.status;
+            const message = err?.response?.data?.message;
+
+            if (status === 500) {
+              Alert.alert('서버 오류', message);
+            } else {
+              Alert.alert('네트워크 오류', '서버에 연결할 수 없습니다.');
+            }
+          }
+        }
+      },
     ]);
   };
 
