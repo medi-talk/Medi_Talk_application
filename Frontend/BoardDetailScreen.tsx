@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useCallback, useState } from "react";
 import {
   View,
   Text,
@@ -9,34 +9,121 @@ import {
   SafeAreaView,
   StatusBar,
 } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
-import { useBoardStore } from "./store/boardStore";
 import { COLORS, FONTS, SIZES } from "./styles/theme";
+import { useAppStore } from "./store/appStore";  
+import api from "./utils/api";
+
+
+type PostData = {
+  consultationPostId: string;
+  categoryName: string;
+  title: string;
+  content: string;
+  postDate: string;
+  updateDate: string;
+};
+
+type ReplyData = {
+  consultationReplyId: string;
+  userId: string;
+  content: string;
+  replyDate: string;
+  updateDate: string;
+  classification: string;
+  medicalInstitution: string;
+  userName: string;
+};
+
+function getClassificationLabel(c : string) {
+  switch (c) {
+    case "doctor":
+      return "의사";
+    case "pharmacist":
+      return "약사";
+    default:
+      return c || "";
+  }
+};
 
 export default function BoardDetailScreen({ route, navigation }: any) {
-  const { id, isDoctor } = route.params; 
-  const { posts, deletePost, deleteAnswer } = useBoardStore();
+  const { state } = useAppStore();
+  const userId = state.user?.id;
+  const userRole = state.user?.role;
+  const { consultationPostId } = route.params;
+  
+  const [loading, setLoading] = useState(false);
+  const [post, setPost] = useState<PostData | null>(null);
+  const [replies, setReplies] = useState<ReplyData[]>([]);
 
-  // 로그인 유저 정보 (DB 연동 시 교체 예정)
-  const userId = "user1";
-  const userName = "홍길동"; // 나중에 로그인 정보로 교체
+  const formatDate = (iso?: string) => {
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return "";
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    const hh = String(d.getHours()).padStart(2, "0");
+    const min = String(d.getMinutes()).padStart(2, "0");
+    return `${yyyy}/${mm}/${dd} ${hh}:${min}`;
+  };
 
-  const post = posts.find((p) => p.id === id);
+  const loadDetail = useCallback(async () => {
+    if (!consultationPostId) return;
+    try {
+      setLoading(true);
+
+      const res = await api.get(`/api/board/getBoardPostWithReplies/${consultationPostId}`);
+
+      if (!res.data.success) {
+        Alert.alert("오류", res.data?.message || "게시글을 불러오는 데 실패했습니다.");
+        return;
+      }
+
+      const pr = res.data.postWithReplies;
+      if (!pr) {
+        setPost(null);
+        setReplies([]);
+        return;
+      }
+
+      setPost(pr as PostData);
+      setReplies(pr.replies as ReplyData[]);
+
+    } catch (err: any) {
+      console.error("❌ load post detail error:", err);
+
+      const status = err?.response?.status;
+      const message = err?.response?.data?.message;
+
+      if (status == 500) {
+        Alert.alert('서버 오류', message);
+      } else {
+        Alert.alert('네트워크 오류', '서버에 연결할 수 없습니다.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [consultationPostId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadDetail();
+    }, [loadDetail])
+  );
 
   if (!post)
     return (
-      <Text style={styles.empty}>
-        게시글을 찾을 수 없습니다. (DB 연동 시 실제 fetch 필요)
-      </Text>
+      <SafeAreaView style={styles.safe}>
+        <StatusBar barStyle="dark-content" />
+        <Text style={styles.empty}>
+          {loading ? "로딩 중..." : "존재하지 않는 게시글입니다."}
+        </Text>
+      </SafeAreaView>
     );
 
-  const formatDate = (iso: string) => {
-    const d = new Date(iso);
-    return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${d
-      .getHours()
-      .toString()
-      .padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}`;
-  };
+  const isDoctor = userRole === "hp";
 
   // 게시글 삭제
   const handleDelete = () => {
@@ -44,27 +131,65 @@ export default function BoardDetailScreen({ route, navigation }: any) {
       { text: "취소", style: "cancel" },
       {
         text: "삭제",
-        onPress: async () => {
-          await deletePost(id);
-          Alert.alert("삭제 완료", "게시글이 삭제되었습니다.");
-          navigation.goBack();
-        },
         style: "destructive",
+        onPress: async () => {
+          try {
+            const res = await api.delete(`/api/board/deleteBoardPost/${consultationPostId}`);
+
+            if (res.data.success) {
+              Alert.alert("삭제 완료", "게시글이 삭제되었습니다.");
+              navigation.goBack();
+            } else {
+              Alert.alert("삭제 실패", res.data.message);
+            }
+
+          } catch (err: any) {
+            console.error("delete post error:", err);
+
+            const status = err?.response?.status;
+            const message = err?.response?.data?.message;
+
+            if (status == 500) {
+              Alert.alert('서버 오류', message);
+            } else {
+              Alert.alert('네트워크 오류', '서버에 연결할 수 없습니다.');
+            }
+          }
+        },
       },
     ]);
   };
 
   // 답변 삭제
-  const handleDeleteAnswer = (answerId: string) => {
+  const handleDeleteAnswer = (consultationReplyId: string) => {
     Alert.alert("답변 삭제", "이 답변을 삭제하시겠습니까?", [
       { text: "취소", style: "cancel" },
       {
         text: "삭제",
-        onPress: async () => {
-          await deleteAnswer(id, answerId);
-          Alert.alert("삭제 완료", "답변이 삭제되었습니다.");
-        },
         style: "destructive",
+        onPress: async () => {
+          try {
+            const res = await api.delete(`/api/board/deleteBoardPostReply/${consultationReplyId}`);
+            if (res.data.success) {
+              Alert.alert("삭제 완료", "답변이 삭제되었습니다.");
+              loadDetail();
+            } else {
+              Alert.alert("삭제 실패", res.data.message);
+            }
+
+          } catch (err: any) {
+            console.error("delete answer error:", err);
+
+            const status = err?.response?.status;
+            const message = err?.response?.data?.message;
+
+            if (status == 500) {
+              Alert.alert('서버 오류', message);
+            } else {
+              Alert.alert('네트워크 오류', '서버에 연결할 수 없습니다.');
+            }
+          }
+        },
       },
     ]);
   };
@@ -75,23 +200,25 @@ export default function BoardDetailScreen({ route, navigation }: any) {
       <ScrollView contentContainerStyle={styles.container}>
         {/* 게시글 본문 */}
         <View style={styles.postCard}>
-          <Text style={styles.category}>{post.category}</Text>
+          <Text style={styles.category}>{post.categoryName}</Text>
           <Text style={styles.title}>{post.title}</Text>
           <Text style={styles.content}>{post.content}</Text>
 
-          <Text style={styles.date}>
-            작성: {formatDate(post.createdAt)}
-            {post.updatedAt && post.updatedAt !== post.createdAt
-              ? ` (수정됨: ${formatDate(post.updatedAt)})`
-              : ""}
-          </Text>
+          <Text style={styles.date}>작성: {formatDate(post.postDate)}</Text>
+          {post.updateDate && post.updateDate !== post.postDate && (
+            <Text style={styles.date}>
+              (수정됨: {formatDate(post.updateDate)})
+            </Text>
+          )}
 
           {/* 사용자 본인 글만 수정/삭제 가능 (의료인은 불가) */}
-          {!isDoctor && post.authorId === userId && (
+          {!isDoctor && (
             <View style={styles.btnRow}>
               <TouchableOpacity
                 style={styles.editBtn}
-                onPress={() => navigation.navigate("BoardEditScreen", { id })}
+                onPress={() => navigation.navigate("BoardEditScreen", { 
+                  consultationPostId: post.consultationPostId,
+                 })}
               >
                 <Text style={styles.btnText}>수정</Text>
               </TouchableOpacity>
@@ -106,32 +233,31 @@ export default function BoardDetailScreen({ route, navigation }: any) {
         {/* 답변 목록 */}
         <Text style={styles.answerHeader}>답변</Text>
 
-        {post.answers.length === 0 ? (
+        {replies.length === 0 ? (
           <Text style={styles.noAnswer}>아직 답변이 없습니다.</Text>
         ) : (
-          post.answers.map((a) => (
-            <View key={a.id} style={styles.answerCard}>
-              <Text style={styles.answerContent}>{a.content}</Text>
+          replies.map((r) => (
+            <View key={r.consultationReplyId} style={styles.answerCard}>
+              <Text style={styles.answerContent}>{r.content}</Text>
               <Text style={styles.answerInfo}>
-                {a.authorType} {a.authorName} ({a.hospital})
+                {getClassificationLabel(r.classification)} {r.userName} ({r.medicalInstitution})
               </Text>
-              <Text style={styles.answerDate}>
-                작성: {formatDate(a.createdAt)}
-                {a.updatedAt && a.updatedAt !== a.createdAt
-                  ? ` (수정됨: ${formatDate(a.updatedAt)})`
-                  : ""}
-              </Text>
+              <Text style={styles.answerDate}>작성: {formatDate(r.replyDate)}</Text>
+              {r.updateDate && r.updateDate !== r.replyDate && (
+                <Text style={styles.answerDate}>
+                  (수정됨: {formatDate(r.updateDate)})
+                </Text>
+              )}
+              
 
               {/* 의료인 본인 답변 수정/삭제 가능 */}
-              {isDoctor && a.authorName === userName && (
+              {isDoctor && r.userId === userId && (
                 <View style={styles.btnRow}>
                   <TouchableOpacity
                     style={styles.editBtn}
                     onPress={() =>
                       navigation.navigate("AnswerEditScreen", {
-                        postId: id,
-                        answerId: a.id,
-                        content: a.content,
+                        consultationReplyId: r.consultationReplyId
                       })
                     }
                   >
@@ -140,7 +266,7 @@ export default function BoardDetailScreen({ route, navigation }: any) {
 
                   <TouchableOpacity
                     style={styles.delBtn}
-                    onPress={() => handleDeleteAnswer(a.id)}
+                    onPress={() => handleDeleteAnswer(r.consultationReplyId)}
                   >
                     <Text style={styles.btnText}>삭제</Text>
                   </TouchableOpacity>
@@ -155,7 +281,7 @@ export default function BoardDetailScreen({ route, navigation }: any) {
           <TouchableOpacity
             style={styles.answerWriteBtn}
             onPress={() =>
-              navigation.navigate("AnswerWriteScreen", { postId: id })
+              navigation.navigate("AnswerWriteScreen", { consultationPostId: consultationPostId })
             }
           >
             <Icon name="comment-plus" size={22} color={COLORS.white} />

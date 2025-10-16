@@ -1,5 +1,5 @@
 // AnswerEditScreen.tsx
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Text,
   TextInput,
@@ -10,18 +10,45 @@ import {
   Alert,
   ScrollView,
 } from "react-native";
-import { useBoardStore } from "./store/boardStore";
 import { COLORS, FONTS, SIZES } from "./styles/theme";
+import api from "./utils/api";
+
 
 export default function AnswerEditScreen({ route, navigation }: any) {
-  const { postId, answerId } = route.params;
-  const { posts, updateAnswer } = useBoardStore();
+  const consultationReplyId = route.params?.consultationReplyId;
 
-  // 기존 답변 데이터 찾기
-  const post = posts.find((p) => p.id === postId);
-  const target = post?.answers.find((a) => a.id === answerId);
+  // 입력 상태
+  const [content, setContent] = useState("");
 
-  const [content, setContent] = useState(target?.content || "");
+  // 기존 답변 정보 API 호출
+  useEffect(() => {
+    if (!consultationReplyId) return;
+    (async () => {
+      try {
+        const res = await api.get(`/api/board/getBoardPostReplyForEdit/${consultationReplyId}`);
+
+        if (!res.data.success) {
+          Alert.alert("오류", res.data?.message || "답변 정보를 불러오는 데 실패했습니다.");
+          return;
+        }
+
+        const reply = res.data.reply;
+        setContent(reply.content);
+
+      } catch (err: any) {
+        console.error("❌ load answer error:", err);
+
+        const status = err?.response?.status;
+        const message = err?.response?.data?.message;
+
+        if (status == 500) {
+          Alert.alert('서버 오류', message);
+        } else {
+          Alert.alert('네트워크 오류', '서버에 연결할 수 없습니다.');
+        }
+      }
+    })();
+  }, []);
 
   const handleUpdate = async () => {
     if (!content.trim()) {
@@ -29,20 +56,31 @@ export default function AnswerEditScreen({ route, navigation }: any) {
       return;
     }
 
-    // DB 연동 시 axios.put(`/api/posts/${postId}/answers/${answerId}`, { content }) 로 교체
-    await updateAnswer(postId, answerId, { content });
+    try {
+      const res = await api.put(`/api/board/updateBoardPostReply/${consultationReplyId}`, { content: content.trim() });
 
-    Alert.alert("수정 완료", "답변이 수정되었습니다.");
-    navigation.goBack();
+      if (!res.data.success) {
+        Alert.alert("오류", res.data?.message || "답변 수정에 실패했습니다.");
+        return;
+      }
+
+      Alert.alert("수정 완료", "답변이 수정되었습니다.");
+      navigation.goBack();
+
+    } catch (err: any) {
+      console.error("❌ update answer error:", err);
+
+      const status = err?.response?.status;
+      const message = err?.response?.data?.message;
+
+      if (status == 500) {
+        Alert.alert('서버 오류', message);
+      } else {
+        Alert.alert('네트워크 오류', '서버에 연결할 수 없습니다.');
+      }
+    }
   };
 
-  if (!target) {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <Text style={styles.emptyText}>답변을 찾을 수 없습니다.</Text>
-      </SafeAreaView>
-    );
-  }
 
   return (
     <SafeAreaView style={styles.safe}>

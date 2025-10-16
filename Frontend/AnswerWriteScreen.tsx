@@ -10,19 +10,18 @@ import {
   Alert,
   ScrollView,
 } from "react-native";
-import { useBoardStore } from "./store/boardStore";
 import { COLORS, FONTS, SIZES } from "./styles/theme";
+import { useAppStore } from "./store/appStore";
+import api from "./utils/api";
 
 export default function AnswerWriteScreen({ route, navigation }: any) {
-  const { postId } = route.params;
-  const { addAnswer } = useBoardStore();
+  const { state } = useAppStore();
+  const userId = state.user?.id;
 
-  // 로그인한 의료인 정보 (DB 연동 시 교체)
-  const [authorName] = useState("홍길동");
-  const [authorType] = useState<"의사" | "약사">("의사");
-  const [hospital] = useState("메디톡병원");
-
+  const { consultationPostId } = route.params;
+  
   const [content, setContent] = useState("");
+
 
   const handleSubmit = async () => {
     if (!content.trim()) {
@@ -30,17 +29,34 @@ export default function AnswerWriteScreen({ route, navigation }: any) {
       return;
     }
 
-    // DB 연동 시 axios.post(`/api/posts/${postId}/answers`, {...}) 로 교체
-    await addAnswer(postId, {
-      postId,
-      authorName,
-      authorType,
-      hospital,
-      content,
-    });
+    const replyPayload = {
+      userId,
+      content: content.trim(),
+    }
 
-    Alert.alert("등록 완료", "답변이 등록되었습니다.");
-    navigation.goBack();
+    try {
+      const res = await api.post(`/api/board/createBoardPostReply/${consultationPostId}`, { replyPayload });
+
+      if (!res.data.success) {
+        Alert.alert("오류", res.data?.message || "답변 등록에 실패했습니다.");
+        return;
+      }
+
+      Alert.alert("등록 완료", "답변이 등록되었습니다.");
+      navigation.goBack();
+
+    } catch (err: any) {
+      console.error("❌ submit answer error:", err);
+
+      const status = err?.response?.status;
+      const message = err?.response?.data?.message;
+
+      if (status == 500) {
+        Alert.alert('서버 오류', message);
+      } else {
+        Alert.alert('네트워크 오류', '서버에 연결할 수 없습니다.');
+      }
+    }
   };
 
   return (

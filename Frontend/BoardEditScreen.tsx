@@ -1,145 +1,265 @@
 // BoardDetailScreen.tsx
-import React from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
+  TextInput,
   StyleSheet,
   SafeAreaView,
   ScrollView,
   TouchableOpacity,
   Alert,
 } from "react-native";
+import { Picker } from '@react-native-picker/picker';
 import { COLORS, FONTS, SIZES } from "./styles/theme";
-import { useBoardStore } from "./store/boardStore";
+import api from "./utils/api";
+
+
+type CategoryData = {
+  categoryId: number;
+  categoryName: string;
+};
 
 export default function BoardDetailScreen({ route, navigation }: any) {
-  const { posts, deletePost, deleteAnswer } = useBoardStore();
-  const { id } = route.params; 
-  const post = posts.find((p) => p.id === id);
+  const consultationPostId = route.params?.consultationPostId;
 
-  // 로그인 사용자/의료인 여부 (나중에 로그인 정보로 교체)
-  const isDoctor = false; 
-  const userId = "user1";
+  // 카테고리
+  const [categories, setCategories] = useState<CategoryData[]>([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(false);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>("__");
 
-  if (!post) {
-    return (
-      <SafeAreaView style={styles.safeArea}>
-        <Text style={styles.emptyText}>게시글을 찾을 수 없습니다.</Text>
-      </SafeAreaView>
+  // 입력 상태
+  const [title, setTitle] = useState("");
+  const [content, setContent] = useState("");
+
+  // 카테고리 목록 API 호출
+  useEffect(() => {
+    (async () => {
+      try {
+        setCategoriesLoading(true);
+
+        const res = await api.get("/api/board/listBoardCategories");
+
+        if (res.data.success) {
+          const raw = Array.isArray(res.data?.categories) ? res.data.categories : [];
+
+          const mapped: CategoryData[] = raw.map((c: any) => {
+            const id = Number(c.categoryId);
+            let name = (c?.categoryName ?? "").toString().trim();
+
+            return { categoryId: id, categoryName: name };
+          });
+
+          const cleaned = mapped.filter(
+            (c) => 
+              Number.isFinite(c.categoryId) && 
+              c.categoryId > 0 && 
+              c.categoryName.length > 0
+          );
+
+          const unique = Array.from(
+            new Map(cleaned.map((c) => [c.categoryId, c])).values()
+          );
+
+          setCategories(unique);
+          if (unique.length > 0) {
+            setSelectedCategoryId(String(unique[0].categoryId));
+          } else {
+            setSelectedCategoryId("__");
+          }
+
+        } else {
+          setCategories([]);
+          setSelectedCategoryId("__");
+        }
+
+      } catch (err : any) {
+        console.error("❌ load categories error:", err);
+
+        const status = err?.response?.status;
+        const message = err?.response?.data?.message;
+
+        if (status == 500) {
+          Alert.alert('서버 오류', message);
+        } else {
+          Alert.alert('네트워크 오류', '서버에 연결할 수 없습니다.');
+        }
+
+      } finally {
+        setCategoriesLoading(false);
+      }
+    })();
+  }, []);
+
+  // 기존 글 정보 API 호출
+  useEffect(() => {
+    if (!consultationPostId) return;
+    (async () => {
+      try {
+        const res = await api.get(`/api/board/getBoardPostForEdit/${consultationPostId}`);
+
+        if (!res.data.success) {
+          Alert.alert("오류", res.data?.message || "게시글 정보를 불러오는 데 실패했습니다.");
+          return;
+        }
+
+        const post = res.data.post;
+
+        setTitle(post.title);
+        setContent(post.content);
+        setSelectedCategoryId(String(post.categoryId));
+
+      } catch (err: any) {
+        console.error("❌ load post for edit error:", err);
+
+        const status = err?.response?.status;
+        const message = err?.response?.data?.message;
+
+        if (status == 500) {
+          Alert.alert('서버 오류', message);
+        } else {
+          Alert.alert('네트워크 오류', '서버에 연결할 수 없습니다.');
+        }
+      }
+    })();
+  }, [consultationPostId]);
+
+
+  const handleUpdate = async () => {
+    if (!title.trim() || !content.trim() || selectedCategoryId === "__") {
+      Alert.alert("입력 오류", "모든 항목을 입력해주세요.");
+      return;
+    }
+
+    const boardPost = {
+      categoryId: Number(selectedCategoryId),
+      title: title.trim(),
+      content: content.trim(),
+    };
+
+    try {
+      const res = await api.put(`/api/board/updateBoardPost/${consultationPostId}`, { boardPost });
+
+      if (!res.data.success) {
+        Alert.alert("오류", res.data.message || "게시글 수정에 실패했습니다.");
+        return;
+      }
+
+      Alert.alert("수정 완료", "게시글이 수정되었습니다.");
+      navigation.goBack();
+
+    } catch (err : any) {
+      console.error("❌ update post error:", err);
+
+      const status = err?.response?.status;
+      const message = err?.response?.data?.message;
+
+      if (status == 500) {
+        Alert.alert('서버 오류', message);
+      } else {
+        Alert.alert('네트워크 오류', '서버에 연결할 수 없습니다.');
+      }
+    }
+  };
+
+  const pickerItems = useMemo(
+      () => (categories || [])
+        .filter((c) => !!c)
+        .filter(
+          (c) => 
+            Number.isFinite(c.categoryId) &&
+            c.categoryId > 0 &&
+            String(c.categoryName).trim().length > 0
+        )
+        .reduce<CategoryData[]>((acc, cur) => {
+          if (!acc.some((x) => x.categoryId === cur.categoryId)) acc.push(cur);
+          return acc;
+        }, []),
+      [categories]
     );
-  }
+  
+    const validSelection = useMemo(
+      () => pickerItems.some((c) => String(c.categoryId) === selectedCategoryId),
+      [pickerItems, selectedCategoryId]
+    );
 
-  const handleDeletePost = async () => {
-    Alert.alert("삭제", "정말 이 글을 삭제하시겠습니까?", [
-      { text: "취소" },
-      {
-        text: "삭제",
-        style: "destructive",
-        onPress: async () => {
-          // DB 연동 시 axios.delete(`/api/posts/${id}`)로 교체
-          await deletePost(id);
-          navigation.goBack();
-        },
-      },
-    ]);
-  };
-
-  const handleDeleteAnswer = async (answerId: string) => {
-    Alert.alert("삭제", "이 답변을 삭제하시겠습니까?", [
-      { text: "취소" },
-      {
-        text: "삭제",
-        style: "destructive",
-        onPress: async () => {
-          // DB 연동 시 axios.delete(`/api/posts/${id}/answers/${answerId}`)로 교체
-          await deleteAnswer(id, answerId);
-        },
-      },
-    ]);
-  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.container}>
-        <Text style={styles.title}>{post.title}</Text>
-        <Text style={styles.category}>{post.category}</Text>
-        <Text style={styles.meta}>
-          작성자: {post.authorName} | 작성일: {new Date(post.createdAt).toLocaleString()}
-          {post.updatedAt &&
-            ` (수정됨: ${new Date(post.updatedAt).toLocaleString()})`}
-        </Text>
+        <Text style={styles.title} >게시글 수정</Text>
 
-        <Text style={styles.content}>{post.content}</Text>
-
-        {/* 사용자가 작성한 글이면 수정/삭제 버튼 */}
-        {post.authorId === userId && (
-          <View style={styles.buttonRow}>
-            <TouchableOpacity
-              style={styles.editBtn}
-              onPress={() => navigation.navigate("BoardEditScreen", { id })}
-            >
-              <Text style={styles.btnText}>수정</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.deleteBtn}
-              onPress={handleDeletePost}
-            >
-              <Text style={styles.btnText}>삭제</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* 의료인일 경우 답변 작성 버튼 */}
-        {isDoctor && (
-          <TouchableOpacity
-            style={styles.answerWriteBtn}
-            onPress={() =>
-              navigation.navigate("BoardAnswerWriteScreen", { postId: id })
-            }
-          >
-            <Text style={styles.btnText}>답변 작성</Text>
-          </TouchableOpacity>
-        )}
-
-        <Text style={styles.answerHeader}>답변</Text>
-        {post.answers.length === 0 ? (
-          <Text style={styles.emptyText}>아직 답변이 없습니다.</Text>
-        ) : (
-          post.answers.map((a) => (
-            <View key={a.id} style={styles.answerCard}>
-              <Text style={styles.answerContent}>{a.content}</Text>
-              <Text style={styles.answerMeta}>
-                {a.authorName} ({a.authorType}, {a.hospital}) |{" "}
-                {new Date(a.createdAt).toLocaleString()}
-                {a.updatedAt &&
-                  ` (수정됨: ${new Date(a.updatedAt).toLocaleString()})`}
-              </Text>
-
-              {/* 의료인이 자기 답변 작성한 경우 수정/삭제 버튼 */}
-              {isDoctor && a.authorName === "의료인로그인명" && (
-                <View style={styles.buttonRow}>
-                  <TouchableOpacity
-                    style={styles.editBtn}
-                    onPress={() =>
-                      navigation.navigate("BoardAnswerEditScreen", {
-                        postId: id,
-                        answerId: a.id,
-                      })
-                    }
-                  >
-                    <Text style={styles.btnText}>수정</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.deleteBtn}
-                    onPress={() => handleDeleteAnswer(a.id)}
-                  >
-                    <Text style={styles.btnText}>삭제</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
+        {/* 카테고리 선택 */}
+        <Text style={styles.label}>카테고리</Text>
+        <View style={styles.pickerBox}>
+          {categoriesLoading ? (
+            <View style={[styles.picker, { justifyContent: "center" }]}>
+              <Text style={{ color: COLORS.gray }}>불러오는 중...</Text>
             </View>
-          ))
-        )}
+          ) : pickerItems.length === 0 ? (
+            <View style={[styles.picker, { justifyContent: "center" }]}>
+              <Text style={{ color: COLORS.gray }}>등록된 카테고리가 없습니다</Text>
+            </View>
+          ) : !validSelection ? (
+            <View style={[styles.picker, { justifyContent: "center" }]}>
+              <Text style={{ color: COLORS.gray }}>카테고리 준비 중...</Text>
+            </View>
+          ) : (
+            <Picker
+              key={pickerItems.length}
+              selectedValue={selectedCategoryId}
+              onValueChange={(val) => {
+                const newVal = String(val);
+                if (newVal !== selectedCategoryId) {
+                  setTimeout(() => setSelectedCategoryId(newVal), 0);
+                }
+              }}
+              mode="dropdown"
+              prompt="카테고리를 선택하세요"
+              style={[styles.picker, { color: COLORS.darkGray }]}
+              dropdownIconColor={COLORS.primary}
+            >
+              {pickerItems.map((c) => (
+                <Picker.Item
+                  key={String(c.categoryId)}
+                  label={String(c.categoryName)}
+                  value={String(c.categoryId)}
+                />
+              ))}
+            </Picker>
+          )}
+        </View>
+        
+        {/* 제목 */}
+        <Text style={styles.label}>제목</Text>
+        <TextInput
+          style={styles.textInput}
+          value={title}
+          onChangeText={setTitle}
+          placeholder="제목을 입력하세요."
+          placeholderTextColor={COLORS.gray}
+        />
+
+        {/* 내용 */}
+        <Text style={styles.label}>내용</Text>
+        <TextInput
+          style={[styles.textInput, styles.textarea]}
+          value={content}
+          onChangeText={setContent}
+          multiline
+          placeholder="답변 내용을 수정하세요."
+          placeholderTextColor={COLORS.gray}
+        />
+
+        {/* 저장 버튼 */}
+        <TouchableOpacity style={styles.editBtn} onPress={handleUpdate}>
+          <Text style={styles.btnText}>저장</Text>
+        </TouchableOpacity>
+        
+        {/* 취소 버튼 */}
+        <TouchableOpacity style={styles.cancelBnt} onPress={() => navigation.goBack()}>
+          <Text style={styles.btnText}>취소</Text>
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
@@ -155,74 +275,54 @@ const styles = StyleSheet.create({
   },
   title: {
     ...FONTS.h2,
-    color: COLORS.darkGray,
-    marginBottom: 4,
-  },
-  category: {
-    ...FONTS.h4,
     color: COLORS.primary,
-    marginBottom: 8,
+    textAlign: "center",
+    marginBottom: 20,
   },
-  meta: {
-    ...FONTS.p,
-    color: COLORS.gray,
-    marginBottom: 12,
+  label: {
+    ...FONTS.h4,
+    color: COLORS.darkGray,
+    marginBottom: 6,
   },
-  content: {
+  textInput: {
+    borderWidth: 1,
+    borderColor: COLORS.gray,
+    borderRadius: SIZES.radius,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginBottom: 15,
     ...FONTS.p,
     color: COLORS.darkGray,
-    marginBottom: 20,
   },
-  buttonRow: {
-    flexDirection: "row",
-    marginBottom: 20,
+  textarea: {
+    height: 120,
+    textAlignVertical: "top",
   },
   editBtn: {
     backgroundColor: COLORS.primary,
-    padding: 10,
-    borderRadius: 6,
-    marginRight: 10,
+    borderRadius: SIZES.radius,
+    paddingVertical: 12,
+    alignItems: "center",
+    marginTop: 24,
   },
-  deleteBtn: {
-    backgroundColor: COLORS.danger,
-    padding: 10,
-    borderRadius: 6,
+  cancelBnt: {
+    backgroundColor: COLORS.gray,
+    borderRadius: SIZES.radius,
+    paddingVertical: 12,
+    alignItems: "center",
+    marginTop: 12,
   },
   btnText: {
-    ...FONTS.h4,
+    ...FONTS.h3,
     color: COLORS.white,
   },
-  answerWriteBtn: {
-    backgroundColor: COLORS.primary,
-    padding: 12,
-    borderRadius: SIZES.radius,
-    marginBottom: 20,
-    alignItems: "center",
-  },
-  answerHeader: {
-    ...FONTS.h3,
-    color: COLORS.darkGray,
-    marginBottom: 10,
-  },
-  answerCard: {
+  pickerBox: {
     backgroundColor: COLORS.lightGray,
     borderRadius: SIZES.radius,
-    padding: SIZES.padding,
     marginBottom: 12,
   },
-  answerContent: {
-    ...FONTS.p,
-    color: COLORS.darkGray,
-    marginBottom: 8,
-  },
-  answerMeta: {
-    ...FONTS.p,
-    color: COLORS.gray,
-  },
-  emptyText: {
-    textAlign: "center",
-    marginTop: 20,
-    color: COLORS.gray,
-    ...FONTS.h4,
+  picker: {
+    height: 50,
+    width: '100%',
   },
 });
