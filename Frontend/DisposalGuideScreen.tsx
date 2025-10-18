@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert } from "react-native";
-import { useAppStore } from "./store/appStore";
 import { COLORS, SIZES, FONTS } from "./styles/theme";
 import api from "./utils/api";
 

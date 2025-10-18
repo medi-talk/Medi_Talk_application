@@ -12,8 +12,10 @@ import MainScreen from "./MainScreen";
 import CustomSettingScreen from "./CustomSettingScreen";
 import DisposalScreen from "./DisposalScreen";
 import DrugInfoScreen from "./DrugInfoScreen";
-import FamilyEditScreen from "./FamilyEditScreen";
 import FamilyListScreen from "./FamilyListScreen";
+import FamilyAddScreen from "./FamilyAddScreen";
+import FamilyDetailScreen from "./FamilyDetailScreen";
+import FamilyEditScreen from "./FamilyEditScreen";
 import IntakeCalcScreen from "./IntakeCalcScreen";
 import IntakeListScreen from "./IntakeListScreen";
 import IntakeAddScreen from "./IntakeAddScreen";
@@ -25,6 +27,7 @@ import MedicationAddScreen from "./MedicationAddScreen";
 import MedicationListScreen from "./MedicationListScreen";
 import MedicationDetailScreen from "./MedicationDetailScreen";
 import MedicationEditScreen from "./MedicationEditScreen";
+import MedicationIntakeScreen from "./MedicationIntakeScreen";
 import PasswordChangeScreen from "./PasswordChangeScreen";
 import ProfileEditScreen from "./ProfileEditScreen";
 import TimerScreen from "./TimerScreen";
@@ -35,8 +38,13 @@ import BoardWriteScreen from "./BoardWriteScreen";
 import BoardEditScreen from "./BoardEditScreen";
 import AnswerWriteScreen from "./AnswerWriteScreen";
 import AnswerEditScreen from "./AnswerEditScreen";
-
+import WarningIngredientListScreen from "./WarningIngredientListScreen";
+import WarningIngredientAddScreen from "./WarningIngredientAddScreen";
 import notifee, { AndroidImportance, EventType } from "@notifee/react-native";
+
+// 가족 복용약 관련 추가 화면
+import FamilyMedicationListScreen from "./FamilyMedicationListScreen";
+import FamilyMedicationIntakeScreen from "./FamilyMedicationIntakeScreen";
 
 const Stack = createNativeStackNavigator();
 export const navigationRef = createNavigationContainerRef<any>();
@@ -46,14 +54,12 @@ export default function App() {
     async function setupNotification() {
       try {
         await notifee.requestPermission();
-
-        const channelId = await notifee.createChannel({
+        await notifee.createChannel({
           id: "timer-channel",
           name: "타이머 알림",
           importance: AndroidImportance.HIGH,
           vibration: true,
         });
-        console.log("Notification channel created:", channelId);
       } catch (e) {
         console.error("Failed to setup notifications", e);
       }
@@ -82,7 +88,6 @@ export default function App() {
     <AppStoreProvider>
       <NavigationContainer ref={navigationRef}>
         <Stack.Navigator initialRouteName="Start">
-          {/* 메인 화면 */}
           <Stack.Screen name="Start" component={StartScreen} />
           <Stack.Screen name="Login" component={LoginScreen} />
           <Stack.Screen name="SignUp" component={SignUpScreen} />
@@ -91,37 +96,48 @@ export default function App() {
           <Stack.Screen name="ProfileEdit" component={ProfileEditScreen} />
           <Stack.Screen name="PasswordChange" component={PasswordChangeScreen} />
 
-          {/* 약물 / 타이머 관련 */}
           <Stack.Screen name="MedicationAdd" component={MedicationAddScreen} />
           <Stack.Screen name="MedicationList" component={MedicationListScreen} />
           <Stack.Screen name="MedicationDetail" component={MedicationDetailScreen} />
           <Stack.Screen name="MedicationEdit" component={MedicationEditScreen} />
+          <Stack.Screen name="MedicationIntake" component={MedicationIntakeScreen} />
           <Stack.Screen name="Timer" component={TimerScreen} />
 
-          {/* 영양소 관련 */}
           <Stack.Screen name="IntakeCalc" component={IntakeCalcScreen} />
           <Stack.Screen name="IntakeListScreen" component={IntakeListScreen} />
           <Stack.Screen name="IntakeAddScreen" component={IntakeAddScreen} />
-          <Stack.Screen name="IntakeDetailScreen"component={IntakeDetailScreen}options={{ headerShown: false }}/>
-          <Stack.Screen name="IntakeEditScreen"component={IntakeEditScreen}options={{ headerShown: false }}/>
+          <Stack.Screen
+            name="IntakeDetailScreen"
+            component={IntakeDetailScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="IntakeEditScreen"
+            component={IntakeEditScreen}
+            options={{ headerShown: false }}
+          />
 
-          {/* 기타 기능 */}
           <Stack.Screen name="Interaction" component={InteractionScreen} />
           <Stack.Screen name="Disposal" component={DisposalScreen} />
           <Stack.Screen name="DisposalGuide" component={DisposalGuideScreen} />
           <Stack.Screen name="DrugInfo" component={DrugInfoScreen} />
 
-          {/* 가족 관리 */}
-          <Stack.Screen name="FamilyEdit" component={FamilyEditScreen} />
           <Stack.Screen name="FamilyList" component={FamilyListScreen} />
+          <Stack.Screen name="FamilyAdd" component={FamilyAddScreen} />
+          <Stack.Screen name="FamilyDetail" component={FamilyDetailScreen} />
+          <Stack.Screen name="FamilyEdit" component={FamilyEditScreen} />
+          <Stack.Screen name="FamilyMedicationList" component={FamilyMedicationListScreen} />
+          <Stack.Screen name="FamilyMedicationIntake" component={FamilyMedicationIntakeScreen} />
 
-          {/* 게시판 */}
           <Stack.Screen name="BoardListScreen" component={BoardListScreen} />
           <Stack.Screen name="BoardDetailScreen" component={BoardDetailScreen} />
           <Stack.Screen name="BoardWriteScreen" component={BoardWriteScreen} />
           <Stack.Screen name="BoardEditScreen" component={BoardEditScreen} />
           <Stack.Screen name="AnswerWriteScreen" component={AnswerWriteScreen} />
           <Stack.Screen name="AnswerEditScreen" component={AnswerEditScreen} />
+
+          <Stack.Screen name="WarningIngredientList" component={WarningIngredientListScreen} />
+          <Stack.Screen name="WarningIngredientAdd" component={WarningIngredientAddScreen} />
         </Stack.Navigator>
       </NavigationContainer>
     </AppStoreProvider>

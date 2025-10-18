@@ -40,7 +40,7 @@ export default function FamilyListScreen({ navigation, route }: any) {
   const renderItem = ({ item }: { item: Family }) => (
     <TouchableOpacity
       style={styles.card}
-      onPress={() => navigation.navigate('FamilyEdit', { family: item })}
+      onPress={() => navigation.navigate('FamilyDetail', { family: item })}
     >
       <View style={styles.left}>
         <View style={styles.avatar}>
@@ -76,7 +76,7 @@ export default function FamilyListScreen({ navigation, route }: any) {
         
         <TouchableOpacity
           style={styles.fab}
-          onPress={() => navigation.navigate('FamilyEdit')}
+          onPress={() => navigation.navigate('FamilyAdd')}
         >
           <Icon name="plus" size={28} color={COLORS.white} />
         </TouchableOpacity>

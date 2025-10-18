@@ -13,9 +13,9 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS, SIZES, FONTS } from './styles/theme';
-import { navigationRef } from './App'; 
+import { navigationRef } from './App';
 import api from './utils/api';
-import { useAppStore } from './store/appStore'; 
+import { useAppStore } from './store/appStore';
 
 const SettingsRow = ({
   icon,
@@ -67,7 +67,8 @@ export default function CustomSettingScreen({ navigation }: any) {
   const handleDeleteAccount = () => {
     Alert.alert('회원 탈퇴', '모든 정보가 영구적으로 삭제됩니다. 정말 탈퇴하시겠습니까?', [
       { text: '취소', style: 'cancel' },
-      { text: '확인',
+      {
+        text: '확인',
         style: 'destructive',
         onPress: async () => {
           try {
@@ -75,14 +76,17 @@ export default function CustomSettingScreen({ navigation }: any) {
 
             if (res.data.success) {
               Alert.alert('성공', '회원 탈퇴가 완료되었습니다.', [
-                { text: '확인', onPress: () => navigation.reset({ index: 0, routes: [{ name: 'Login' }] }) },
+                {
+                  text: '확인',
+                  onPress: () =>
+                    navigation.reset({ index: 0, routes: [{ name: 'Login' }] }),
+                },
               ]);
               return;
             } else {
               Alert.alert('실패', res.data.message);
             }
-
-          } catch (err : any) {
+          } catch (err: any) {
             console.error('delete account error:', err);
 
             const status = err?.response?.status;
@@ -94,7 +98,7 @@ export default function CustomSettingScreen({ navigation }: any) {
               Alert.alert('네트워크 오류', '서버에 연결할 수 없습니다.');
             }
           }
-        }
+        },
       },
     ]);
   };
@@ -109,7 +113,8 @@ export default function CustomSettingScreen({ navigation }: any) {
         <SettingsRow
           icon="account-edit-outline"
           title="프로필 수정"
-          onPress={() => navigationRef.navigate('ProfileEdit')}/>
+          onPress={() => navigationRef.navigate('ProfileEdit')}
+        />
         <SettingsRow
           icon="lock-outline"
           title="비밀번호 변경"
@@ -139,12 +144,22 @@ export default function CustomSettingScreen({ navigation }: any) {
           onPress={() => navigationRef.navigate('FamilyList')}
         />
 
+        {/* 주의 성분 관리 섹션 추가 */}
+        <Text style={styles.sectionTitle}>건강 관리</Text>
+        <SettingsRow
+          icon="alert-circle-outline"
+          title="주의 성분 설정"
+          onPress={() => navigationRef.navigate('WarningIngredientList')}
+        />
+
         <Text style={styles.sectionTitle}>기타</Text>
         <TouchableOpacity style={styles.actionRow} onPress={handleLogout}>
           <Text style={styles.actionText}>로그아웃</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.actionRow} onPress={handleDeleteAccount}>
-          <Text style={[styles.actionText, { color: COLORS.danger }]}>회원 탈퇴</Text>
+          <Text style={[styles.actionText, { color: COLORS.danger }]}>
+            회원 탈퇴
+          </Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
