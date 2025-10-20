@@ -20,6 +20,19 @@ async function findUserMedications(userId) {
   return list;
 };
 
+// 가족 복용약 목록 조회
+async function findFamilyMedications(familyId) {
+  const sql = `
+    SELECT user_medication_id, medication_name, start_date, end_date, expiration_date, interval_time
+    FROM user_medication
+    WHERE user_id = ? AND family_notify_flag = TRUE
+  `;
+  const [rows] = await pool.execute(sql, [familyId]);
+  const list = camelizeRows(rows);
+
+  return list;
+};
+
 // 사용자 복용약 상세 정보 조회
 async function findUserMedication(userMedicationId) {
   const sql = `
@@ -49,7 +62,20 @@ async function findUserMedicationAlarms(userMedicationId) {
   const list = camelizeRows(rows);
 
   return list;
-}
+};
+
+// 사용자 복용약 복용 기록 조회
+async function findUserMedicationIntakes(userMedicationId) {
+  const sql = `
+    SELECT medication_intake_id, intake_date, intake_time
+    FROM user_medication_intake
+    WHERE user_medication_id = ?
+  `;
+  const [rows] = await pool.execute(sql, [userMedicationId]);
+  const list = camelizeRows(rows);
+
+  return list;
+};
 
 
 /* ---------- INSERT ---------- */
@@ -80,6 +106,20 @@ async function insertUserMedicationAlarms(userMedicationId, alarmTimes, conn = p
   const values = arr.map(time => [userMedicationId, time]);
   const [r] = await conn.query(sql, [values]);
   return { insertId: r.insertId, affectedRows: r.affectedRows };
+};
+
+// 사용자 복용약 복용 기록 추가
+async function insertUserMedicationIntake(userMedicationId, i) {
+  const sql = `
+    INSERT INTO user_medication_intake(user_medication_id, intake_date, intake_time)
+    VALUES(?, ?, ?)
+  `;
+  const params = [
+    userMedicationId, i.intakeDate, i.intakeTime
+  ];
+  const [r] = await pool.execute(sql, params);
+
+  return r.affectedRows;
 };
 
 
@@ -124,16 +164,31 @@ async function deleteAllUserMedicationAlarms(userMedicationId, conn = pool) {
   const [r] = await conn.execute(sql, [userMedicationId]);
 
   return r.affectedRows;
-}
+};
+
+// 사용자 복용약 복용 기록 삭제
+async function deleteUserMedicationIntake(medicationIntakeId) {
+  const sql = `
+    DELETE FROM user_medication_intake
+    WHERE medication_intake_id = ?
+  `;
+  const [r] = await pool.execute(sql, [medicationIntakeId]);
+
+  return r.affectedRows;
+};
 
 
 module.exports = {
   findUserMedications,
+  findFamilyMedications,
   findUserMedication,
   findUserMedicationAlarms,
+  findUserMedicationIntakes,
   insertUserMedication,
   insertUserMedicationAlarms,
+  insertUserMedicationIntake,
   updateUserMedication,
   deleteUserMedication,
-  deleteAllUserMedicationAlarms
+  deleteAllUserMedicationAlarms,
+  deleteUserMedicationIntake
 };

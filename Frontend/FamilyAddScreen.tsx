@@ -6,9 +6,13 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS, SIZES, FONTS } from './styles/theme';
-// import api from './utils/api'; // 추후 DB 연동 시 사용
+import { useAppStore } from './store/appStore';
+import api from './utils/api';
 
 export default function FamilyAddScreen({ navigation }: any) {
+  const { state } = useAppStore();
+  const userId = state.user?.id;
+
   const [familyId, setFamilyId] = useState('');
   const [familyName, setFamilyName] = useState('');
 
@@ -18,23 +22,49 @@ export default function FamilyAddScreen({ navigation }: any) {
       return;
     }
 
+    // 사용자 존재 여부 확인
     try {
-      // TODO: 추후 DB 연동
-      // const res = await api.post('/api/family/addFamily', { familyId, familyName });
-      // if (res.data.success) {
-      //   Alert.alert('등록 완료', '가족이 추가되었습니다.');
-      //   navigation.goBack();
-      //   return;
-      // }
-
-      // 현재는 더미 동작
-      Alert.alert('등록 완료', `${familyName}님이 가족 목록에 추가되었습니다.`);
-      navigation.navigate('FamilyList', {
-        added: { id: Date.now().toString(), name: familyName, relation: '기타', note: null },
-      });
+      const res = await api.get(`/api/family/getUser/${familyId}/${familyName}`);
+      if (!res.data.success || res.data.user === null) {
+        Alert.alert('오류', '해당 아이디와 이름의 사용자가 존재하지 않습니다.');
+        return;
+      }
     } catch (err: any) {
-      console.error('add family error:', err);
-      Alert.alert('오류', '가족 추가 중 문제가 발생했습니다.');
+      console.error("❌ getUser error:", err);
+      
+      const status = err.response?.status;
+      const message = err.response?.data?.message;
+
+      if (status == 500) {
+        Alert.alert('서버 오류', message);
+      } else {
+        Alert.alert('네트워크 오류', '서버에 연결할 수 없습니다.');
+      }
+    }
+
+    try {
+      const res = await api.post(`/api/family/createFamilyLink/${userId}`, { familyId });
+
+      if (!res.data.success) {
+        Alert.alert('오류', '가족 추가에 실패했습니다.');
+        return;
+      }
+
+      Alert.alert("등록 완료", `${familyName}님이 추가되었습니다.`, [
+        { text: "확인", onPress: () => navigation.goBack() },
+      ]);
+        
+    } catch (err: any) {
+      console.error('❌createFamilyLink error:', err);
+
+      const status = err.response?.status;
+      const message = err.response?.data?.message;
+
+      if (status == 500) {
+        Alert.alert('서버 오류', message);
+      } else {
+        Alert.alert('네트워크 오류', '서버에 연결할 수 없습니다.');
+      }
     }
   };
 

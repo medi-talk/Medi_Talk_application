@@ -1,5 +1,5 @@
 // FamilyEditScreen.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect, use } from 'react';
 import {
   View,
   Text,
@@ -12,18 +12,54 @@ import {
   Alert,
 } from 'react-native';
 import { COLORS, SIZES, FONTS } from './styles/theme';
+import { useAppStore } from './store/appStore';
+import api from './utils/api';
 
 const RELATIONS = ['부모', '형제자매', '자녀', '배우자', '보호자', '기타'];
 
 export default function FamilyEditScreen({ route, navigation }: any) {
-  const { family } = route.params;
+  const { state } = useAppStore();
+  const userId = state.user?.id;
+  const familyId = route.params?.familyId;
 
-  const [name, setName] = useState(family.name);
-  const [relation, setRelation] = useState(family.relation);
-  const [note, setNote] = useState(family.note || '');
+  const [nickname, setNickname] = useState("");
+  const [relation, setRelation] = useState("");
+  const [memo, setMemo] = useState("");
 
-  const handleSave = () => {
-    if (!name.trim()) {
+  // 가족 정보 API 호출
+  useEffect(() => {
+    if (!familyId || !userId) return;
+    (async () => {
+      try {
+        const res = await api.get(`/api/family/getUserFamilyDetail/${userId}/${familyId}`);
+
+        if (!res.data.success) {
+          Alert.alert('오류', '가족 정보를 불러오는 데 실패했습니다.');
+          return;
+        }
+
+        const family = res.data.family;
+        setNickname(family.nickname);
+        setRelation(family.relation);
+        setMemo(family.memo || "");
+
+      } catch (err: any) {
+        console.error('❌ fetch family detail error:', err);
+
+        const status = err.response?.status;
+        const message = err.response?.data?.message;
+
+        if (status == 500) {
+          Alert.alert('서버 오류', message);
+        } else {
+          Alert.alert('네트워크 오류', '서버에 연결할 수 없습니다.');
+        }
+      } 
+    })();
+  }, [userId, familyId]);
+
+  const handleSave = async () => {
+    if (!nickname.trim()) {
       Alert.alert('입력 오류', '이름을 입력해주세요.');
       return;
     }
@@ -32,11 +68,34 @@ export default function FamilyEditScreen({ route, navigation }: any) {
       return;
     }
 
-    navigation.navigate('FamilyDetail', {
-      family: { ...family, name, relation, note },
-    });
+    try {
+      const res = await api.put(`/api/family/updateUserFamily/${userId}/${familyId}`, {
+        nickname: nickname.trim(),
+        relation,
+        memo: memo.trim(),
+      });
 
-    Alert.alert('저장 완료', '가족 정보가 수정되었습니다.');
+      if (!res.data.success) {
+        Alert.alert('오류', res.data?.message || '가족 정보 수정에 실패했습니다.');
+        return;
+      }
+
+      Alert.alert('저장 완료', '가족 정보가 수정되었습니다.', [
+        { text: '확인', onPress: () => navigation.goBack() },
+      ]);
+
+    } catch (err: any) {
+      console.error('❌ update family error:', err);
+
+      const status = err.response?.status;
+      const message = err.response?.data?.message;
+
+      if (status == 500) {
+        Alert.alert('서버 오류', message);
+      } else {
+        Alert.alert('네트워크 오류', '서버에 연결할 수 없습니다.');
+      }
+    }
   };
 
   return (
@@ -47,11 +106,11 @@ export default function FamilyEditScreen({ route, navigation }: any) {
       </View>
 
       <ScrollView contentContainerStyle={styles.container}>
-        <Text style={styles.label}>이름 (변경)</Text>
+        <Text style={styles.label}>이름 (별명)</Text>
         <TextInput
           style={styles.input}
-          value={name}
-          onChangeText={setName}
+          value={nickname}
+          onChangeText={setNickname}
           placeholder="이름을 입력하세요"
           placeholderTextColor={COLORS.gray}
         />
@@ -82,8 +141,8 @@ export default function FamilyEditScreen({ route, navigation }: any) {
         <Text style={styles.label}>복약 메모 (선택)</Text>
         <TextInput
           style={[styles.input, styles.memo]}
-          value={note}
-          onChangeText={setNote}
+          value={memo}
+          onChangeText={setMemo}
           placeholder="복약 관련 메모를 입력하세요"
           placeholderTextColor={COLORS.gray}
           multiline

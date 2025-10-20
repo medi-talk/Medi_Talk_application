@@ -1,5 +1,5 @@
 // FamilyDetailScreen.tsx
-import React from "react";
+import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -10,25 +10,99 @@ import {
   ScrollView,
   Alert,
 } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { COLORS, FONTS, SIZES } from "./styles/theme";
+import { useAppStore } from "./store/appStore";
+import api from "./utils/api";
+
+type FamilyData = {
+  familyId: string;
+  nickname: string;
+  relation: '부모' | '형제자매' | '자녀' | '배우자' | '보호자' | '기타';
+  memo?: string;
+};
+
 
 export default function FamilyDetailScreen({ route, navigation }: any) {
-  const { family } = route.params || {
-    family: { id: 1, name: "김아버지", relation: "부", note: "혈압약 복용 중" },
+  const { state } = useAppStore();
+  const userId = state.user?.id;
+  const familyId = route.params?.familyId;
+
+  const [family,  setFamily] = useState<FamilyData | null>(null);
+
+  const [loading, setLoading] = useState(false);
+
+  const fetchFamilyDetail = async () => {
+    if (!familyId) return;
+    try {
+      setLoading(true);
+
+      const res = await api.get(`/api/family/getUserFamilyDetail/${userId}/${familyId}`);
+
+      if (res.data.success) {
+        const detail: FamilyData = res.data.family;
+        setFamily(detail);
+      } else {
+        Alert.alert('오류', '가족 상세 정보를 불러오는 데 실패했습니다.');
+      }
+    } catch (err : any) {
+      console.error('❌ fetch family list error:', err);
+      
+      const status = err.response?.status;
+      const message = err.response?.data?.message;
+
+      if (status == 500) {
+        Alert.alert('서버 오류', message);
+      } else {
+        Alert.alert('네트워크 오류', '서버에 연결할 수 없습니다.');
+      }
+
+    } finally {
+      setLoading(false);
+    }
   };
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchFamilyDetail();
+    }, [familyId])
+  );
+
 
   const handleDelete = () => {
     Alert.alert(
       "가족 삭제",
-      `${family.name}님을 가족 목록에서 삭제하시겠습니까?`,
+      `${family?.nickname}님을 가족 목록에서 삭제하시겠습니까?`,
       [
         { text: "취소", style: "cancel" },
         {
           text: "삭제",
           style: "destructive",
-          onPress: () => {
-            navigation.navigate("FamilyList", { removedId: family.id });
+          onPress: async () => {
+            try {
+              const res = await api.delete(`/api/family/deleteFamilyLink/${userId}/${familyId}`);
+              
+              if (res.data.success) {
+                Alert.alert("삭제 완료", "가족이 삭제되었습니다.", [
+                  { text: "확인", onPress: () => navigation.goBack() },
+                ]);
+              } else {
+                Alert.alert('오류', '가족 삭제에 실패했습니다.');
+              }
+
+            } catch (err: any) {
+              console.error("❌ delete family link error:", err);
+
+              const status = err.response?.status;
+              const message = err.response?.data?.message;
+
+              if (status == 500) {
+                Alert.alert('서버 오류', message);
+              } else {
+                Alert.alert('네트워크 오류', '서버에 연결할 수 없습니다.');
+              }
+            }
           },
         },
       ]
@@ -51,13 +125,13 @@ export default function FamilyDetailScreen({ route, navigation }: any) {
       {/* 내용 */}
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.content}>
-          <Text style={styles.name}>{family.name}</Text>
+          <Text style={styles.name}>{family?.nickname}</Text>
           <Text style={styles.label}>관계</Text>
-          <Text style={styles.value}>{family.relation}</Text>
+          <Text style={styles.value}>{family?.relation}</Text>
 
           <Text style={styles.label}>복약 메모</Text>
           <Text style={styles.value}>
-            {family.note || "등록된 메모가 없습니다."}
+            {family?.memo || "등록된 메모가 없습니다."}
           </Text>
         </View>
 
@@ -68,8 +142,8 @@ export default function FamilyDetailScreen({ route, navigation }: any) {
             style={[styles.actionBtn, { backgroundColor: "#4CAF50" }]}
             onPress={() =>
               navigation.navigate("FamilyMedicationList", {
-                familyId: family.id,
-                familyName: family.name,
+                familyId: family?.familyId,
+                familyName: family?.nickname,
               })
             }
           >
@@ -79,7 +153,7 @@ export default function FamilyDetailScreen({ route, navigation }: any) {
           <View style={styles.row}>
             <TouchableOpacity
               style={[styles.smallBtn, { backgroundColor: COLORS.primary }]}
-              onPress={() => navigation.navigate("FamilyEdit", { family })}
+              onPress={() => navigation.navigate("FamilyEdit", { familyId: family?.familyId })}
             >
               <Text style={styles.actionText}>수정하기</Text>
             </TouchableOpacity>

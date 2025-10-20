@@ -6,6 +6,8 @@ const intakeTimerRoutes = require('./routes/intakeTimerRoutes');
 const discardInfoRoutes = require('./routes/discardInfoRoutes');
 const intakeCalcRoutes = require('./routes/intakeCalcRoutes');
 const boardRoutes = require('./routes/boardRoutes');
+const familyRoutes = require('./routes/familyRoutes');
+const ingredientRoutes = require('./routes/ingredientRoutes');
 
 const app = express();
 app.use(cors());
@@ -23,6 +25,8 @@ app.use('/api/intakeTimer', intakeTimerRoutes);
 app.use('/api/discardInfo', discardInfoRoutes);
 app.use('/api/intakeCalc', intakeCalcRoutes);
 app.use('/api/board', boardRoutes);
+app.use('/api/family', familyRoutes);
+app.use('/api/ingredient', ingredientRoutes);
 
 
 const PORT = process.env.PORT || 3000;

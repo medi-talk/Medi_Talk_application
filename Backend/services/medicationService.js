@@ -4,6 +4,7 @@ const pool = require('../db/connection').promise();
 
 const {
   findUserMedications,
+  findFamilyMedications,
   findUserMedication,
   findUserMedicationAlarms,
   insertUserMedication,
@@ -64,6 +65,34 @@ async function buildUserMedicationList(userId) {
       alarmFlag: !!m.alarmFlag,
       dawnAlarmOffFlag: !!m.dawnAlarmOffFlag,
       familyNotifyFlag: !!m.familyNotifyFlag,
+      alarmTimes: alarms
+    }
+  });
+
+  return list;
+};
+
+// 가족 복용약 목록 조회 (복용약 + 복용 알람)
+async function buildFamilyMedicationList(familyId) {
+  const medication = await findFamilyMedications(familyId);
+  if (medication.length === 0) return [];
+
+  const alarmListArr = await Promise.all(
+    medication.map(m => findUserMedicationAlarms(m.userMedicationId))
+  );
+
+  const list = medication.map((m, i) => {
+    const alarms = normalizeAlarmRows(alarmListArr[i]);
+    const intervalMinutes = timeStrToMinutes(m.intervalTime);
+
+    return {
+      userMedicationId: m.userMedicationId,
+      medicationName: m.medicationName,
+      startDate: m.startDate,
+      endDate: m.endDate,
+      expirationDate: m.expirationDate,
+      intervalTime: m.intervalTime,
+      intervalMinutes: intervalMinutes,
       alarmTimes: alarms
     }
   });
@@ -165,6 +194,7 @@ async function updateMedicationWithAlarmsTX(userMedicationId, m, alarmTimes) {
 
 module.exports = {
   buildUserMedicationList,
+  buildFamilyMedicationList,
   buildUserMedicationDetail,
   insertMedicationWithAlarmsTX,
   updateMedicationWithAlarmsTX

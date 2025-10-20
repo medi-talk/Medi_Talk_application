@@ -1,13 +1,17 @@
 /* ========== 복용약 ========== */
 
 const {
+  findUserMedicationIntakes,
   insertUserMedication,
+  insertUserMedicationIntake,
   updateUserMedication: updateUserMedicationModel,
   deleteUserMedication: deleteUserMedicationModel,
+  deleteUserMedicationIntake: deleteUserMedicationIntakeModel
 } = require('../models/medicationModel');
 
 const {
   buildUserMedicationList,
+  buildFamilyMedicationList,
   buildUserMedicationDetail,
   insertMedicationWithAlarmsTX,
   updateMedicationWithAlarmsTX
@@ -37,6 +41,27 @@ const listUserMedications = async (req, res) => {
   }
 };
 
+// 가족 복용약 목록 조회 (복용약 + 복용 알람)
+const listFamilyMedications = async (req, res) => {
+  try {
+    const familyId = req.params.familyId;
+    const medications = await buildFamilyMedicationList(familyId);
+
+    return res.json({
+      success: true,
+      medications
+    });
+
+  } catch (err) {
+    console.error('❌ listFamilyMedications error:', err);
+
+    return res.status(500).json({ 
+      success: false, 
+      message: '서버 내부 오류가 발생했습니다.' 
+    });
+  }
+};
+
 // 사용자 복용약 상세 조회 (복용약 + 복용 알람)
 const getUserMedicationDetail = async (req, res) => {
   try {
@@ -50,6 +75,27 @@ const getUserMedicationDetail = async (req, res) => {
 
   } catch (err) {
     console.error('❌ getUserMedicationDetail error:', err);
+
+    return res.status(500).json({ 
+      success: false, 
+      message: '서버 내부 오류가 발생했습니다.' 
+    });
+  }
+};
+
+// 사용자 복용약 복용 기록 조회
+const getUserMedicationIntakes = async (req, res) => {
+  try {
+    const userMedicationId = req.params.userMedicationId;
+    const intakes = await findUserMedicationIntakes(userMedicationId);
+
+    return res.json({
+      success: true,
+      intakes
+    });
+
+  } catch (err) {
+    console.error('❌ getUserMedicationIntakes error:', err);
 
     return res.status(500).json({ 
       success: false, 
@@ -121,6 +167,37 @@ const createUserMedicationWithAlarms = async (req, res) => {
 
   } catch (err) {
     console.error('❌ createUserMedication error:', err);
+
+    return res.status(500).json({ 
+      success: false, 
+      message: '서버 내부 오류가 발생했습니다.' 
+    });
+  }
+};
+
+// 사용자 복용약 복용 기록 추가
+const createUserMedicationIntake = async (req, res) => {
+  try {
+    const userMedicationId = req.params.userMedicationId;
+    const intake = req.body.intake;
+
+    const result = await insertUserMedicationIntake(userMedicationId, intake);
+
+    // 추가 성공
+    if (result) {
+      return res.json({
+        success: true
+      });
+    }
+
+    // 추가 실패
+    return res.json({
+      success: false,
+      message: '복용 기록 추가에 실패했습니다.'
+    });
+
+  } catch (err) {
+    console.error('❌ createUserMedicationIntake error:', err);
 
     return res.status(500).json({ 
       success: false, 
@@ -233,13 +310,47 @@ const deleteUserMedication = async (req, res) => {
   }
 };
 
+// 사용자 복용약 복용 기록 삭제
+const deleteUserMedicationIntake = async (req, res) => {
+  try {
+    const medicationIntakeId = req.params.medicationIntakeId;
+
+    const result = await deleteUserMedicationIntakeModel(medicationIntakeId);
+
+    // 삭제 성공
+    if (result) {
+      return res.json({
+        success: true
+      });
+    }
+
+    // 삭제 실패
+    return res.json({
+      success: false,
+      message: '복용 기록 삭제에 실패했습니다.'
+    });
+
+  } catch (err) {
+    console.error('❌ deleteUserMedicationIntake error:', err);
+
+    return res.status(500).json({
+      success: false,
+      message: '서버 내부 오류가 발생했습니다.'
+    });
+  }
+};
+
 
 module.exports = {
   listUserMedications,
+  listFamilyMedications,
   getUserMedicationDetail,
+  getUserMedicationIntakes,
   createUserMedication,
   createUserMedicationWithAlarms,
+  createUserMedicationIntake,
   updateUserMedication,
   updateUserMedicationWithAlarms,
-  deleteUserMedication
+  deleteUserMedication,
+  deleteUserMedicationIntake
 };

@@ -1,54 +1,78 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, StatusBar, SafeAreaView } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, StatusBar, SafeAreaView, Alert } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS, SIZES, FONTS } from './styles/theme';
+import { useAppStore } from './store/appStore';
+import api from './utils/api';
+import { ActivityIndicator } from 'react-native-paper';
 
-type Family = {
-  id: string;
-  name: string;
-  relation: string; 
-  note?: string;   
+type FamilyData = {
+  familyId: string;
+  nickname: string;
+  relation: '부모' | '형제자매' | '자녀' | '배우자' | '보호자' | '기타';
+  memo?: string;
 };
 
-const initialData: Family[] = [
-  { id: '1', name: '김아버지', relation: '부모', note: '고혈압 약 복용 중' },
-  { id: '2', name: '이동생', relation: '형제자매' },
-];
 
 export default function FamilyListScreen({ navigation, route }: any) {
-  const [members, setMembers] = useState<Family[]>(initialData);
+  const { state } = useAppStore();
+  const userId = state.user?.id;
 
-  useEffect(() => {
-    const added: Family | undefined = route?.params?.added;
-    const edited: Family | undefined = route?.params?.edited;
-    const removedId: string | undefined = route?.params?.removedId;
+  const [family, setFamily] = useState<FamilyData[]>([]);
 
-    if (added) {
-      setMembers(prev => [{ ...added, id: Date.now().toString() }, ...prev]);
-      navigation.setParams({ added: undefined });
-    }
-    if (edited) {
-      setMembers(prev => prev.map(m => (m.id === edited.id ? edited : m)));
-      navigation.setParams({ edited: undefined });
-    }
-    if (removedId) {
-      setMembers(prev => prev.filter(m => m.id !== removedId));
-      navigation.setParams({ removedId: undefined });
-    }
-  }, [route?.params?.added, route?.params?.edited, route?.params?.removedId, navigation]);
+  const [loading, setLoading] = useState(false);
 
-  const renderItem = ({ item }: { item: Family }) => (
+
+  const fetchFamilyList = async () => {
+    if (!userId) return;
+    try {
+      setLoading(true);
+
+      const res = await api.get(`/api/family/listUserFamilies/${userId}`);
+
+      if (res.data.success) {
+        const list: FamilyData[] = res.data.families || [];
+        setFamily(list);
+      } else {
+        Alert.alert('오류', '가족 목록을 불러오는 데 실패했습니다.');
+      }
+
+    } catch (err: any) {
+      console.error('❌ fetch family list error:', err);
+
+      const status = err.response?.status;
+      const message = err.response?.data?.message;
+
+      if (status == 500) {
+        Alert.alert('서버 오류', message);
+      } else {
+        Alert.alert('네트워크 오류', '서버에 연결할 수 없습니다.');
+      }
+
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchFamilyList();
+    }, [userId])
+  );
+
+  const renderItem = ({ item }: { item: FamilyData }) => (
     <TouchableOpacity
       style={styles.card}
-      onPress={() => navigation.navigate('FamilyDetail', { family: item })}
+      onPress={() => navigation.navigate('FamilyDetail', { familyId: item.familyId })}
     >
       <View style={styles.left}>
         <View style={styles.avatar}>
           <Icon name="account" size={24} color={COLORS.white} />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={styles.name}>{item.name}</Text>
-          <Text style={styles.sub}>{item.relation}{item.note ? ` · ${item.note}` : ''}</Text>
+          <Text style={styles.name}>{item.nickname}</Text>
+          <Text style={styles.sub}>{item.relation}{item.memo ? ` · ${item.memo}` : ''}</Text>
         </View>
       </View>
       <Icon name="chevron-right" size={24} color={COLORS.gray} />
@@ -59,15 +83,20 @@ export default function FamilyListScreen({ navigation, route }: any) {
     <SafeAreaView style={styles.safe}>
       <StatusBar barStyle="dark-content" />
       <View style={styles.container}>
-        {members.length === 0 ? (
+        {loading ? (
+          <View style={styles.empty}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+            <Text style={{ ...FONTS.p, color: COLORS.gray, marginTop: SIZES.base }}>가족 목록을 불러오는 중...</Text>
+          </View>
+        ) : family.length === 0 ? (
           <View style={styles.empty}>
             <Text style={styles.emptyTitle}>가족이 비어 있어요</Text>
             <Text style={styles.emptySub}>아래 + 버튼으로 가족을 추가해보세요</Text>
           </View>
         ) : (
           <FlatList
-            data={members}
-            keyExtractor={i => i.id}
+            data={family}
+            keyExtractor={i => i.familyId}
             renderItem={renderItem}
             contentContainerStyle={{ paddingVertical: SIZES.padding / 2 }}
           />

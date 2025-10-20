@@ -13,65 +13,108 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS, FONTS, SIZES } from './styles/theme';
+import { useAppStore } from './store/appStore';
+import api from './utils/api';
+
+type IngredientData = {
+  ingredientId: number;
+  ingredientName: string;
+  ingredientEnglishName: string;
+};
 
 export default function WarningIngredientListScreen({ navigation }: any) {
-  const [ingredients, setIngredients] = useState<
-    { id: number; name: string; englishName?: string }[]
-  >([]);
+  const { state } = useAppStore();
+  const userId = state.user?.id;
 
-  // 더미 데이터 (API 연동 전)
-  useEffect(() => {
-    const dummy = [
-      { id: 1, name: '이부프로펜', englishName: 'ibuprofen' },
-      { id: 2, name: '아세트아미노펜', englishName: 'acetaminophen' },
-      { id: 3, name: '카페인', englishName: 'caffeine' },
-    ];
-    setIngredients(dummy);
-  }, []);
+  const [ingredients, setIngredients] = useState<IngredientData[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  // 사용자 성분 목록 API 호출
+  const fetchUserIngredients = async () => {
+    if (!userId) return;
+    try {
+      setLoading(true);
+
+      const res = await api.get(`/api/ingredient/listUserIngredients/${userId}`);
+
+      if (res.data.success) {
+        const list: IngredientData[] = res.data.ingredients || [];
+        setIngredients(list);
+      } else {
+        Alert.alert('오류', '주의 성분 목록을 불러오는 데 실패했습니다.');
+      }
+
+    } catch (err: any) {
+      console.error('❌ fetch user ingredients error:', err);
+
+      const status = err.response?.status;
+      const message = err.response?.data?.message;
+
+      if (status == 500) {
+        Alert.alert('서버 오류', message);
+      } else {
+        Alert.alert('네트워크 오류', '서버에 연결할 수 없습니다.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useFocusEffect(
     useCallback(() => {
-      const params = navigation.getState()?.routes?.find(
-        (r: any) => r.name === 'WarningIngredientList'
-      )?.params as any;
-
-      const added = params?.added;
-      if (added && !ingredients.some((i) => i.id === added.id)) {
-        setIngredients((prev) => [...prev, added]);
-      }
-    }, [navigation, ingredients])
+      fetchUserIngredients();
+    }, [userId])
   );
 
-  const handleDelete = (id: number, name: string) => {
-    Alert.alert(
-      '주의 성분 삭제',
-      `${name} 성분을 목록에서 삭제하시겠습니까?`,
-      [
-        { text: '취소', style: 'cancel' },
-        {
-          text: '삭제',
-          style: 'destructive',
-          onPress: async () => {
-            // TODO: 실제 API 삭제 연결 예정
-            setIngredients((prev) => prev.filter((x) => x.id !== id));
-            Alert.alert('삭제 완료', `${name}이(가) 목록에서 제거되었습니다.`);
-          },
-        },
-      ],
-      { cancelable: true }
-    );
+  const handleDelete = (ingredient: IngredientData) => {
+    Alert.alert('주의 성분 삭제', `${ingredient.ingredientName} 성분을 목록에서 삭제하시겠습니까?`, [
+      { text: '취소', style: 'cancel' },
+      {
+        text: '삭제',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            setLoading(true);
+
+            const res = await api.delete(`/api/ingredient/deleteUserIngredient/${userId}/${ingredient.ingredientId}`);
+
+            if (res.data.success) {
+              Alert.alert('삭제 완료', `${ingredient.ingredientName}이(가) 목록에서 제거되었습니다.`, [
+                { text: '확인', onPress: () => fetchUserIngredients() },
+              ]);
+            } else {
+              Alert.alert('오류', '주의 성분 삭제에 실패했습니다.');
+            }
+
+          } catch (err: any) {
+            console.error('❌ deleteUserIngredient error:', err);
+
+            const status = err.response?.status;
+            const message = err.response?.data?.message;
+
+            if (status == 500) {
+              Alert.alert('서버 오류', message);
+            } else {
+              Alert.alert('네트워크 오류', '서버에 연결할 수 없습니다.');
+            }
+          } finally {
+            setLoading(false);
+          }
+        }
+      },
+    ]);
   };
 
   // 목록 렌더러
-  const renderItem = ({ item }: { item: { id: number; name: string; englishName?: string } }) => (
+  const renderItem = ({ item }: { item: IngredientData }) => (
     <View style={styles.card}>
       <View>
-        <Text style={styles.name}>{item.name}</Text>
-        {item.englishName ? <Text style={styles.eng}>{item.englishName}</Text> : null}
+        <Text style={styles.name}>{item.ingredientName}</Text>
+        {item.ingredientEnglishName ? <Text style={styles.eng}>{item.ingredientEnglishName}</Text> : null}
       </View>
       <TouchableOpacity
         style={styles.deleteBtn}
-        onPress={() => handleDelete(item.id, item.name)}
+        onPress={() => handleDelete(item)}
       >
         <Icon name="delete-outline" size={22} color={COLORS.danger} />
       </TouchableOpacity>
@@ -94,7 +137,7 @@ export default function WarningIngredientListScreen({ navigation }: any) {
       {/* 목록 */}
       <FlatList
         data={ingredients}
-        keyExtractor={(item) => item.id.toString()}
+        keyExtractor={(item) => item.ingredientId.toString()}
         renderItem={renderItem}
         ListEmptyComponent={
           <View style={styles.empty}>
@@ -107,7 +150,7 @@ export default function WarningIngredientListScreen({ navigation }: any) {
       {/* 추가 버튼 */}
       <TouchableOpacity
         style={styles.fab}
-        onPress={() => navigation.navigate('WarningIngredientAdd', { existing: ingredients })}
+        onPress={() => navigation.navigate('WarningIngredientAdd')}
       >
         <Icon name="plus" size={28} color={COLORS.white} />
       </TouchableOpacity>
