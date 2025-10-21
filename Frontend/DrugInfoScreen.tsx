@@ -12,8 +12,25 @@ import {
   Alert,
 } from "react-native";
 import { COLORS, SIZES, FONTS } from "./styles/theme";
+import api from "./utils/api";  // [DB] 접근
 
 const SERVICE_KEY = ""; // 공공데이터포털 디코딩키
+const USE_LOCAL_DB = !SERVICE_KEY; // [DB] 사용 여부
+
+// [DB] -> 공공데이터 응답 키 매핑
+function mapLocalDetailToPublicKeys(med: any) {
+  if (!med) return null;
+  return {
+    ITEM_NAME: med.medicationName,
+    efcyQesitm: med.efficacy,
+    useMethodQesitm: med.useMethod,
+    atpnWarnQesitm: med.warning,
+    atpnQesitm: med.notandum,
+    intrcQesitm: med.interaction,
+    seQesitm: med.sideEffect,
+    depositMethodQesitm: med.storageMethod,
+  };
+};
 
 async function fetchDrugInfo(name: string) {
   const url = `https://apis.data.go.kr/1471000/DrbEasyDrugInfoService/getDrbEasyDrugList?serviceKey=${encodeURIComponent(
@@ -30,9 +47,63 @@ async function fetchDrugInfo(name: string) {
   }
 }
 
+// [DB] 자동완성 및 검색: 로컬 목록 조회
+async function fetchLocalMedicationList(keyword: string) {
+  try {
+    const res = await api.get(`/api/medicationInfo/listMedications`, {
+      params: { keyword }
+    });
+    if (res.data?.success && Array.isArray(res.data.medications)) {
+      // suggestions 용으로 이름 반환
+      return res.data.medications.map((m: any) => ({
+        medicationInformationId: m.medicationInformationId,
+        ITEM_NAME: m.medicationName,
+      }));
+    }
+    return [];
+  } catch (err : any) {
+    console.error("로컬 약품 목록 조회 실패:", err.message);
+    return [];
+  }
+};
+
+// [DB] 검색: 로컬 상세 정보 조회 -> 공공데이터 키 매핑
+async function fetchDrugInfoFromLocal(name: string) {
+  const list = await fetchLocalMedicationList(name);
+  const top = list.slice(0, 5);
+
+  const details = await Promise.all(
+    top.map(async (m: any) => {
+      try {
+        const res = await api.get(`/api/medicationInfo/getMedicationDetail/${m.medicationInformationId}`)
+        if (res.data?.success && res.data.medication) {
+          return mapLocalDetailToPublicKeys(res.data.medication);
+        }
+      } catch (err: any) {
+        console.error("로컬 약품 상세 조회 실패:", err.message);
+      }
+      return null;
+    })
+  )
+
+  // null 제거
+  return details.filter(Boolean);
+};
+
+// [공용] 검색
+async function fetchDrugInfoDual(name: string) {
+  if (USE_LOCAL_DB) return fetchDrugInfoFromLocal(name);
+  return fetchDrugInfo(name);
+};
+
 // 자동완성 (입력값 기반)
 async function fetchDrugSuggestions(query: string) {
-  return fetchDrugInfo(query);
+  // [DB + 공공데이터]
+  if (!query.trim()) return [];
+  if (USE_LOCAL_DB) return fetchLocalMedicationList(query.trim());
+  return fetchDrugInfo(query.trim());
+  // [공공데이터만 사용 시]
+  // return fetchDrugInfo(query);
 }
 
 export default function DrugInfoScreen() {
@@ -58,7 +129,8 @@ export default function DrugInfoScreen() {
       Alert.alert("알림", "약 이름을 입력하세요.");
       return;
     }
-    const infoList = await fetchDrugInfo(name.trim());
+    // const infoList = await fetchDrugInfo(name.trim());   // [공공데이터 전용]
+    const infoList = await fetchDrugInfoDual(name.trim());  // [DB + 공공데이터]
     if (infoList.length === 0) {
       Alert.alert("안내", "해당 약품 정보를 찾을 수 없습니다.");
     }

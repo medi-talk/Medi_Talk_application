@@ -8,6 +8,7 @@ const intakeCalcRoutes = require('./routes/intakeCalcRoutes');
 const boardRoutes = require('./routes/boardRoutes');
 const familyRoutes = require('./routes/familyRoutes');
 const ingredientRoutes = require('./routes/ingredientRoutes');
+const medicationInfoRoutes = require('./routes/medicationInfoRoutes');
 
 const app = express();
 app.use(cors());
@@ -27,6 +28,7 @@ app.use('/api/intakeCalc', intakeCalcRoutes);
 app.use('/api/board', boardRoutes);
 app.use('/api/family', familyRoutes);
 app.use('/api/ingredient', ingredientRoutes);
+app.use('/api/medicationInfo', medicationInfoRoutes);
 
 
 const PORT = process.env.PORT || 3000;
