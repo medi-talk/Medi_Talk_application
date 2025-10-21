@@ -5,7 +5,7 @@ import { BACKEND_APP_CONFIG } from "../config/apiConfig";
 const SERVER_BASE = BACKEND_APP_CONFIG.BASE_URL;
 
 // 환경 스위치
-const USE_REMOTE_SERVER = true; // true → 서버로, false → 로컬(adb reverse)
+const USE_REMOTE_SERVER = false; // true → 서버로, false → 로컬(adb reverse)
 
 const getBaseURL = () => {
    if (!USE_REMOTE_SERVER) {
